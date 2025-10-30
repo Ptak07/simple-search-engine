@@ -5,5 +5,5 @@ import lombok.Data;
 @Data
 public class DocumentRequest {
     private String id;
-    private String contest;
+    private String content;
 }
