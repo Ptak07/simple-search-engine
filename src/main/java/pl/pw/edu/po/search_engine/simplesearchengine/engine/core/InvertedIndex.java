@@ -1,8 +1,10 @@
 package pl.pw.edu.po.search_engine.simplesearchengine.engine.core;
 
+import java.io.Serializable;
 import java.util.*;
 
-public class InvertedIndex {
+public class InvertedIndex implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     // Mapping: term -> (document ID -> term frequency)
     private final Map<String, Map<Integer, List<Integer>>> index = new HashMap<>();
@@ -68,6 +70,36 @@ public class InvertedIndex {
     public void printIndex() {
         index.forEach((term, docs) -> {
             System.out.println(term + " -> " + docs);
+        });
+    }
+
+    /**
+     * Clear all documents from the index (delegation pattern support)
+     */
+    public synchronized void clear() {
+        index.clear();
+        forwardIndex.clear();
+        nextDocId = 0;
+    }
+
+    /**
+     * Merge another index into this one (delegation pattern support)
+     * Preserves all documents from the new index with new document IDs
+     */
+    public synchronized void merge(InvertedIndex other) {
+        if (other == null) return;
+
+        // Merge forward index and rebuild inverted index
+        other.forwardIndex.forEach((oldDocId, content) -> {
+            int newDocId = nextDocId++;
+            forwardIndex.put(newDocId, content);
+        });
+
+        // Rebuild the inverted index based on forward index
+        // Note: We lose term position information during merge, so we reset it
+        other.index.forEach((term, docMap) -> {
+            index.computeIfAbsent(term, k -> new HashMap<>())
+                    .putAll(docMap);
         });
     }
 }

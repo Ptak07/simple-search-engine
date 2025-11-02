@@ -1,5 +1,6 @@
 package pl.pw.edu.po.search_engine.simplesearchengine.service;
 
+import lombok.Getter;
 import org.springframework.stereotype.Service;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
@@ -11,6 +12,7 @@ import java.util.List;
 public class IndexingService {
 
     private final TextPreprocessor textPreprocessor;
+    @Getter
     private final InvertedIndex invertedIndex;
 
     public IndexingService() {
@@ -43,7 +45,13 @@ public class IndexingService {
         invertedIndex.printIndex();
     }
 
-    public InvertedIndex getInvertedIndex() {
-        return invertedIndex;
+    /**
+     * Replace index content with new index (delegation pattern)
+     * Clears current index and merges content from newIndex
+     * Keeps the same InvertedIndex object instance (final field)
+     */
+    public void replaceIndex(InvertedIndex newIndex) {
+        invertedIndex.clear();
+        invertedIndex.merge(newIndex);
     }
 }
