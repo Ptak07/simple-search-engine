@@ -56,6 +56,13 @@ public class InvertedIndex {
     }
 
     /**
+     * Returns original document content by its ID.
+     */
+    public String getDocumentCountById(int docId) {
+        return forwardIndex.get(docId);
+    }
+
+    /**
      * Print whole index
      */
     public void printIndex() {

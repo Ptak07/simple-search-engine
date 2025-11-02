@@ -4,16 +4,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResponse;
+import pl.pw.edu.po.search_engine.simplesearchengine.service.IndexingService;
 
 @RestController
 @RequestMapping("/api")
 public class SearchController {
 
-    private final SearchService searchService;
+    private final IndexingService indexingService;
 
     // Constructor-based dependency injection
-    public SearchController(SearchService searchService) {
-        this.searchService = searchService;
+    public SearchController(IndexingService indexingService) {
+        this.indexingService = indexingService;
     }
 
     /**
@@ -22,24 +23,19 @@ public class SearchController {
      */
     @PostMapping("/documents")
     @ResponseStatus(HttpStatus.CREATED)
-    public void addDocument(DocumentRequest documentRequest) {
-        searchService.indexDocument(documentRequest);
+    public String addDocument(@RequestBody DocumentRequest request) {
+        int docId = indexingService.index(request);
+        return "Document indexed successfully width ID: " + docId;
     }
 
     /**
-     * GET /api/search?q=term
-     * Executes a search query and returns ranked results.
+     * GET /api/index
+     * Lets you view the current state of the inverted index.
      */
-    @GetMapping("/search")
-    public SearchResponse search(@RequestParam("q") String query) {
-        return searchService.search(query);
+    @GetMapping("/index")
+    public String printIndex() {
+        indexingService.printIndex();
+        return "Index printed to console.";
     }
 
-    /**
-     * Simple heatlth check endpoint.
-     */
-    @GetMapping("/ping")
-    public String ping() {
-        return "Search API is running.";
-    }
 }
