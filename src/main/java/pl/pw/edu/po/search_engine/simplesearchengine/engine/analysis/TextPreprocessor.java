@@ -17,7 +17,7 @@ public class TextPreprocessor {
     );
 
     private static final Pattern TOKEN_PATTERN = Pattern.compile("[^a-zA-Z0-9]+");
-    private final EnglishStemmer stemmer = new EnglishStemmer();
+    private final ThreadLocal<EnglishStemmer> stemmer = ThreadLocal.withInitial(EnglishStemmer::new);
 
     public List<String> process(String text) {
         if (text == null || text.isBlank()) return List.of();
@@ -42,9 +42,10 @@ public class TextPreprocessor {
     }
 
     private String stem(String word) {
-        stemmer.setCurrent(word);
-        if (stemmer.stem()) {
-            return stemmer.getCurrent();
+        EnglishStemmer stemmerInstance = stemmer.get();
+        stemmerInstance.setCurrent(word);
+        if (stemmerInstance.stem()) {
+            return stemmerInstance.getCurrent();
         }
         return word;
     }
