@@ -52,6 +52,6 @@ Thumbs.db
 # Lombok-generated
 .lombok/
 
-# Env files
+# Environment variables
 .env
-
+.env.local
