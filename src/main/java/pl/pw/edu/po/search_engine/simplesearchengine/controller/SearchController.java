@@ -3,7 +3,6 @@ package pl.pw.edu.po.search_engine.simplesearchengine.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResponse;
 import pl.pw.edu.po.search_engine.simplesearchengine.service.IndexingService;
 import pl.pw.edu.po.search_engine.simplesearchengine.service.SearchService;
@@ -21,17 +20,7 @@ public class SearchController {
         this.searchService = searchService;
     }
 
-
-    /**
-     * POST /api/documents
-     * Adds a new document to the search index.
-     */
-    @PostMapping("/documents")
-    @ResponseStatus(HttpStatus.CREATED)
-    public String addDocument(@RequestBody DocumentRequest request) {
-        int docId = indexingService.index(request);
-        return "Document indexed successfully width ID: " + docId;
-    }
+    // Note: POST /api/documents moved to DocumentController
 
     /**
      * GET /api/index

@@ -32,6 +32,9 @@ public class Document {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     @Column(name = "crawled_at")
     private LocalDateTime crawledAt;
 
@@ -41,6 +44,11 @@ public class Document {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
     // Custom constructor (without ID and timestamps)
