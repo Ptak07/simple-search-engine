@@ -4,6 +4,9 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Old persistence file (replaced by PostgreSQL)
+index.ser
+
 ### STS ###
 .apt_generated
 .classpath
