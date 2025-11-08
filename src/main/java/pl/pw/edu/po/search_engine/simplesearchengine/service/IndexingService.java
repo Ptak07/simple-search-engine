@@ -1,6 +1,7 @@
 package pl.pw.edu.po.search_engine.simplesearchengine.service;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
@@ -9,6 +10,7 @@ import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
 import java.util.List;
 
 @Service
+@Slf4j
 public class IndexingService {
 
     private final TextPreprocessor textPreprocessor;
@@ -21,7 +23,7 @@ public class IndexingService {
     }
 
     /**
-     * Indexing new document
+     * Indexing new document (stara metoda - kompatybilność wsteczna)
      * 1. Processing text (tokenizing, stopwords, stemming)
      * 2. Save result to index
      */
@@ -32,6 +34,34 @@ public class IndexingService {
     }
 
     /**
+     * Add document to index (używana przez DocumentService)
+     * @param docId - Document ID from PostgreSQL
+     * @param content - Document content
+     */
+    public void addDocument(String docId, String content) {
+        log.debug("Adding document to index: docId={}", docId);
+        List<String> tokens = textPreprocessor.process(content);
+        invertedIndex.addDocument(content, tokens);
+    }
+
+    /**
+     * Remove document from index
+     * @param docId - Document ID to remove
+     */
+    public void removeDocument(String docId) {
+        log.debug("Removing document from index: docId={}", docId);
+        invertedIndex.removeDocument(Integer.parseInt(docId));
+    }
+
+    /**
+     * Clear entire index (remove all documents)
+     */
+    public void clearIndex() {
+        log.info("Clearing entire index");
+        invertedIndex.clear();
+    }
+
+    /**
      * Returns number of all indexed documents
      */
     public int getDocumentCount() {
@@ -39,7 +69,7 @@ public class IndexingService {
     }
 
     /**
-     * Heler function for tests
+     * Helper function for tests
      */
     public void printIndex() {
         invertedIndex.printIndex();

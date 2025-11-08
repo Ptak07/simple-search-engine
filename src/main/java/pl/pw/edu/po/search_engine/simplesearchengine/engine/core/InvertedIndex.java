@@ -6,7 +6,7 @@ import java.util.*;
 public class InvertedIndex implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    // Mapping: term -> (document ID -> term frequency)
+    // Mapping: term -> (document ID -> term positions)
     private final Map<String, Map<Integer, List<Integer>>> index = new HashMap<>();
 
     // Forward index: document ID -> content
@@ -14,10 +14,11 @@ public class InvertedIndex implements Serializable {
 
     private int nextDocId;
 
-    /*
+    /**
      * Add documents to the inverted index.
      *
      * @param content processed document content
+     * @param tokens tokenized content
      * @return assigned document ID
      */
     public synchronized int addDocument(String content, List<String> tokens) {
@@ -36,7 +37,7 @@ public class InvertedIndex implements Serializable {
         return docId;
     }
 
-    /*
+    /**
      * Returns map of documents (id -> positions) containing the term
      */
     public Map<Integer, List<Integer>> getDocumentsForTerm(String term) {
@@ -59,6 +60,7 @@ public class InvertedIndex implements Serializable {
 
     /**
      * Returns original document content by its ID.
+     * (Note: duplicate of getDocumentById - consider removing)
      */
     public String getDocumentCountById(int docId) {
         return forwardIndex.get(docId);
@@ -80,6 +82,23 @@ public class InvertedIndex implements Serializable {
         index.clear();
         forwardIndex.clear();
         nextDocId = 0;
+    }
+
+    /**
+     * Remove document from index
+     * Removes all term entries for the given document ID
+     */
+    public synchronized void removeDocument(int docId) {
+        // 1. Remove from forward index
+        forwardIndex.remove(docId);
+
+        // 2. Remove from inverted index (all terms containing this docId)
+        index.forEach((term, docMap) -> {
+            docMap.remove(docId);
+        });
+
+        // 3. Remove empty terms (optional - clean up)
+        index.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     }
 
     /**
