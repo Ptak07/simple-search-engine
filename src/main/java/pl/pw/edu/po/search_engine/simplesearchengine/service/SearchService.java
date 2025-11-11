@@ -189,6 +189,7 @@ public class SearchService {
                 .id(document.getId())
                 .title(document.getTitle())
                 .content(document.getContent())
+                .url(document.getUrl())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();
