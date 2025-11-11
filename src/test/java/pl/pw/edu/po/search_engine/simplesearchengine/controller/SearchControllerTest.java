@@ -8,23 +8,25 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
+import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentResponse;
+import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResponse;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResult;
-import pl.pw.edu.po.search_engine.simplesearchengine.service.IndexingService;
 import pl.pw.edu.po.search_engine.simplesearchengine.service.SearchService;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collections;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.hamcrest.Matchers.*;
 
 /**
- * Integration tests for SearchController.
- * Tests REST API endpoints.
+ * Integration tests for SearchController (Phase 5).
+ * Tests enhanced search API with GET and query parameters.
  */
 @WebMvcTest(SearchController.class)
 class SearchControllerTest {
@@ -35,240 +37,354 @@ class SearchControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private IndexingService indexingService;
 
     @MockitoBean
     private SearchService searchService;
 
     @BeforeEach
     void setUp() {
-        // Reset mocks before each test
-        reset(indexingService, searchService);
+        reset(searchService);
     }
 
-    @Test
-    void testAddDocument() throws Exception {
-        DocumentRequest request = new DocumentRequest("1", "Test document content");
-        when(indexingService.index(any(DocumentRequest.class))).thenReturn(0);
-
-        mockMvc.perform(post("/api/documents")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("indexed successfully")));
-
-        verify(indexingService, times(1)).index(any(DocumentRequest.class));
-    }
-
-    @Test
-    void testAddDocumentWithEmptyContent() throws Exception {
-        DocumentRequest request = new DocumentRequest("1", "");
-        when(indexingService.index(any(DocumentRequest.class))).thenReturn(0);
-
-        mockMvc.perform(post("/api/documents")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
-
-        verify(indexingService, times(1)).index(any(DocumentRequest.class));
-    }
-
-    @Test
-    void testAddMultipleDocuments() throws Exception {
-        DocumentRequest request1 = new DocumentRequest("1", "First document");
-        DocumentRequest request2 = new DocumentRequest("2", "Second document");
-
-        when(indexingService.index(any(DocumentRequest.class))).thenReturn(0, 1);
-
-        mockMvc.perform(post("/api/documents")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request1)))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(post("/api/documents")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request2)))
-                .andExpect(status().isCreated());
-
-        verify(indexingService, times(2)).index(any(DocumentRequest.class));
-    }
-
-    @Test
-    void testPrintIndex() throws Exception {
-        doNothing().when(indexingService).printIndex();
-
-        mockMvc.perform(get("/api/index"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Index printed to console."));
-
-        verify(indexingService, times(1)).printIndex();
-    }
+    // ========================================
+    // PHASE 5: Enhanced Search API Tests
+    // ========================================
 
     @Test
     void testSearchWithResults() throws Exception {
-        SearchResult result1 = new SearchResult(0, "Machine learning document", 0.95);
-        SearchResult result2 = new SearchResult(1, "Deep learning document", 0.85);
-        SearchResponse response = new SearchResponse(List.of(result1, result2));
+        // Given
+        DocumentResponse doc = DocumentResponse.builder()
+                .id(1L)
+                .title("Java Programming Guide")
+                .content("Java is a popular programming language")
+                .url("https://example.com/java")
+                .createdAt(LocalDateTime.now())
+                .build();
 
-        when(searchService.search(anyString())).thenReturn(response);
+        SearchResult result = SearchResult.builder()
+                .document(doc)
+                .score(8.5)
+                .matchedTerms(List.of("java", "programming"))
+                .snippet("...Java is a popular programming language...")
+                .build();
 
+        SearchResponse response = SearchResponse.builder()
+                .query("java programming")
+                .totalResults(1L)
+                .limit(10)
+                .offset(0)
+                .results(List.of(result))
+                .searchTimeMs(15L)
+                .build();
+
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
+
+        // When & Then
         mockMvc.perform(get("/api/search")
-                        .param("q", "machine learning"))
+                        .param("query", "java programming")
+                        .param("limit", "10")
+                        .param("offset", "0"))
                 .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.query").value("java programming"))
+                .andExpect(jsonPath("$.totalResults").value(1))
+                .andExpect(jsonPath("$.limit").value(10))
+                .andExpect(jsonPath("$.offset").value(0))
+                .andExpect(jsonPath("$.searchTimeMs").value(15))
                 .andExpect(jsonPath("$.results").isArray())
-                .andExpect(jsonPath("$.results.length()").value(2))
-                .andExpect(jsonPath("$.results[0].documentId").value(0))
-                .andExpect(jsonPath("$.results[0].score").value(0.95))
-                .andExpect(jsonPath("$.results[1].documentId").value(1))
-                .andExpect(jsonPath("$.results[1].score").value(0.85));
+                .andExpect(jsonPath("$.results.length()").value(1))
+                .andExpect(jsonPath("$.results[0].document.id").value(1))
+                .andExpect(jsonPath("$.results[0].document.title").value("Java Programming Guide"))
+                .andExpect(jsonPath("$.results[0].score").value(8.5))
+                .andExpect(jsonPath("$.results[0].matchedTerms").isArray())
+                .andExpect(jsonPath("$.results[0].matchedTerms", hasSize(2)))
+                .andExpect(jsonPath("$.results[0].snippet").value("...Java is a popular programming language..."));
 
-        verify(searchService, times(1)).search("machine learning");
+        verify(searchService, times(1)).search(any(SearchRequest.class));
     }
 
     @Test
     void testSearchWithNoResults() throws Exception {
-        SearchResponse response = new SearchResponse(List.of());
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("nonexistentterm")
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(5L)
+                .build();
 
-        when(searchService.search(anyString())).thenReturn(response);
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
 
+        // When & Then
         mockMvc.perform(get("/api/search")
-                        .param("q", "nonexistent term"))
+                        .param("query", "nonexistentterm"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.query").value("nonexistentterm"))
+                .andExpect(jsonPath("$.totalResults").value(0))
                 .andExpect(jsonPath("$.results").isArray())
-                .andExpect(jsonPath("$.results.length()").value(0));
+                .andExpect(jsonPath("$.results").isEmpty());
 
-        verify(searchService, times(1)).search("nonexistent term");
+        verify(searchService, times(1)).search(any(SearchRequest.class));
+    }
+
+    @Test
+    void testSearchWithDefaultPagination() throws Exception {
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("test")
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(3L)
+                .build();
+
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
+
+        // When & Then - no limit/offset params should use defaults
+        mockMvc.perform(get("/api/search")
+                        .param("query", "test"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limit").value(10))
+                .andExpect(jsonPath("$.offset").value(0));
+    }
+
+    @Test
+    void testSearchWithCustomPagination() throws Exception {
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("test")
+                .totalResults(50L)
+                .limit(5)
+                .offset(10)
+                .results(Collections.emptyList())
+                .searchTimeMs(8L)
+                .build();
+
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
+
+        // When & Then
+        mockMvc.perform(get("/api/search")
+                        .param("query", "test")
+                        .param("limit", "5")
+                        .param("offset", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limit").value(5))
+                .andExpect(jsonPath("$.offset").value(10))
+                .andExpect(jsonPath("$.totalResults").value(50));
+    }
+
+    @Test
+    void testSearchWithMultipleResults() throws Exception {
+        // Given
+        DocumentResponse doc1 = DocumentResponse.builder()
+                .id(1L)
+                .title("Spring Boot Tutorial")
+                .content("Spring Boot content")
+                .url("https://example.com/spring")
+                .build();
+
+        DocumentResponse doc2 = DocumentResponse.builder()
+                .id(2L)
+                .title("Java Basics")
+                .content("Java basics content")
+                .url("https://example.com/java")
+                .build();
+
+        SearchResult result1 = SearchResult.builder()
+                .document(doc1)
+                .score(9.2)
+                .matchedTerms(List.of("spring", "boot"))
+                .snippet("...Spring Boot content...")
+                .build();
+
+        SearchResult result2 = SearchResult.builder()
+                .document(doc2)
+                .score(7.5)
+                .matchedTerms(List.of("java"))
+                .snippet("...Java basics...")
+                .build();
+
+        SearchResponse response = SearchResponse.builder()
+                .query("java spring")
+                .totalResults(2L)
+                .limit(10)
+                .offset(0)
+                .results(List.of(result1, result2))
+                .searchTimeMs(20L)
+                .build();
+
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
+
+        // When & Then
+        mockMvc.perform(get("/api/search")
+                        .param("query", "java spring"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalResults").value(2))
+                .andExpect(jsonPath("$.results.length()").value(2))
+                .andExpect(jsonPath("$.results[0].score").value(9.2))
+                .andExpect(jsonPath("$.results[1].score").value(7.5))
+                .andExpect(jsonPath("$.results[0].document.title").value("Spring Boot Tutorial"))
+                .andExpect(jsonPath("$.results[1].document.title").value("Java Basics"));
+    }
+
+    @Test
+    void testSearchResultsContainAllRequiredFields() throws Exception {
+        // Given
+        DocumentResponse doc = DocumentResponse.builder()
+                .id(42L)
+                .title("Test Document")
+                .content("Full content here")
+                .url("https://test.com")
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        SearchResult result = SearchResult.builder()
+                .document(doc)
+                .score(7.8)
+                .matchedTerms(List.of("test"))
+                .snippet("...Full content here...")
+                .build();
+
+        SearchResponse response = SearchResponse.builder()
+                .query("test")
+                .totalResults(1L)
+                .limit(10)
+                .offset(0)
+                .results(List.of(result))
+                .searchTimeMs(12L)
+                .build();
+
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
+
+        // When & Then - verify all required fields are present
+        mockMvc.perform(get("/api/search")
+                        .param("query", "test"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.query").exists())
+                .andExpect(jsonPath("$.totalResults").exists())
+                .andExpect(jsonPath("$.limit").exists())
+                .andExpect(jsonPath("$.offset").exists())
+                .andExpect(jsonPath("$.searchTimeMs").exists())
+                .andExpect(jsonPath("$.results[0].document").exists())
+                .andExpect(jsonPath("$.results[0].document.id").value(42))
+                .andExpect(jsonPath("$.results[0].document.title").exists())
+                .andExpect(jsonPath("$.results[0].document.content").exists())
+                .andExpect(jsonPath("$.results[0].document.url").exists())
+                .andExpect(jsonPath("$.results[0].score").exists())
+                .andExpect(jsonPath("$.results[0].matchedTerms").exists())
+                .andExpect(jsonPath("$.results[0].snippet").exists());
     }
 
     @Test
     void testSearchWithEmptyQuery() throws Exception {
-        SearchResponse response = new SearchResponse(List.of());
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("")
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(1L)
+                .build();
 
-        when(searchService.search(anyString())).thenReturn(response);
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
 
+        // When & Then
         mockMvc.perform(get("/api/search")
-                        .param("q", ""))
+                        .param("query", ""))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results").isArray())
-                .andExpect(jsonPath("$.results.length()").value(0));
-
-        verify(searchService, times(1)).search("");
+                .andExpect(jsonPath("$.totalResults").value(0));
     }
 
     @Test
     void testSearchWithSpecialCharacters() throws Exception {
-        SearchResponse response = new SearchResponse(List.of());
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("test@123#!")
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(2L)
+                .build();
 
-        when(searchService.search(anyString())).thenReturn(response);
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
 
+        // When & Then
         mockMvc.perform(get("/api/search")
-                        .param("q", "test@123!"))
-                .andExpect(status().isOk());
-
-        verify(searchService, times(1)).search("test@123!");
-    }
-
-    @Test
-    void testSearchWithMultipleWords() throws Exception {
-        SearchResult result = new SearchResult(0, "Content about machine learning", 0.9);
-        SearchResponse response = new SearchResponse(List.of(result));
-
-        when(searchService.search(anyString())).thenReturn(response);
-
-        mockMvc.perform(get("/api/search")
-                        .param("q", "machine learning algorithms"))
+                        .param("query", "test@123#!"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results.length()").value(1));
-
-        verify(searchService, times(1)).search("machine learning algorithms");
+                .andExpect(jsonPath("$.query").value("test@123#!"));
     }
 
     @Test
-    void testSearchWithSpaces() throws Exception {
-        SearchResponse response = new SearchResponse(List.of());
+    void testSearchReturnsCorrectContentType() throws Exception {
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("test")
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(5L)
+                .build();
 
-        when(searchService.search(anyString())).thenReturn(response);
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
 
+        // When & Then
         mockMvc.perform(get("/api/search")
-                        .param("q", "  test  query  "))
-                .andExpect(status().isOk());
-
-        verify(searchService, times(1)).search("  test  query  ");
-    }
-
-
-    @Test
-    void testSearchResultsOrdered() throws Exception {
-        SearchResult result1 = new SearchResult(0, "Most relevant", 0.99);
-        SearchResult result2 = new SearchResult(1, "Less relevant", 0.75);
-        SearchResult result3 = new SearchResult(2, "Least relevant", 0.50);
-        SearchResponse response = new SearchResponse(List.of(result1, result2, result3));
-
-        when(searchService.search(anyString())).thenReturn(response);
-
-        mockMvc.perform(get("/api/search")
-                        .param("q", "test"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[0].score").value(0.99))
-                .andExpect(jsonPath("$.results[1].score").value(0.75))
-                .andExpect(jsonPath("$.results[2].score").value(0.50));
-    }
-
-    @Test
-    void testAddDocumentReturnsDocumentId() throws Exception {
-        DocumentRequest request = new DocumentRequest("test-id", "Test content");
-        when(indexingService.index(any(DocumentRequest.class))).thenReturn(42);
-
-        mockMvc.perform(post("/api/documents")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("42")));
-    }
-
-    @Test
-    void testSearchContentType() throws Exception {
-        SearchResponse response = new SearchResponse(List.of());
-        when(searchService.search(anyString())).thenReturn(response);
-
-        mockMvc.perform(get("/api/search")
-                        .param("q", "test"))
+                        .param("query", "test"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON));
     }
 
     @Test
-    void testAddDocumentWithLongContent() throws Exception {
-        StringBuilder longContent = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
-            longContent.append("word").append(i).append(" ");
-        }
+    void testSearchWithLongQuery() throws Exception {
+        // Given
+        String longQuery = "word ".repeat(100); // 100 words
+        SearchResponse response = SearchResponse.builder()
+                .query(longQuery.trim())
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(10L)
+                .build();
 
-        DocumentRequest request = new DocumentRequest("1", longContent.toString());
-        when(indexingService.index(any(DocumentRequest.class))).thenReturn(0);
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/documents")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
-
-        verify(indexingService, times(1)).index(any(DocumentRequest.class));
+        // When & Then
+        mockMvc.perform(get("/api/search")
+                        .param("query", longQuery))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.query").value(longQuery.trim()));
     }
 
     @Test
-    void testSearchReturnsCompleteSearchResult() throws Exception {
-        SearchResult result = new SearchResult(5, "Full document content here", 0.87);
-        SearchResponse response = new SearchResponse(List.of(result));
+    void testSearchVerifiesServiceCalled() throws Exception {
+        // Given
+        SearchResponse response = SearchResponse.builder()
+                .query("test")
+                .totalResults(0L)
+                .limit(10)
+                .offset(0)
+                .results(Collections.emptyList())
+                .searchTimeMs(3L)
+                .build();
 
-        when(searchService.search(anyString())).thenReturn(response);
+        when(searchService.search(any(SearchRequest.class))).thenReturn(response);
 
+        // When
         mockMvc.perform(get("/api/search")
-                        .param("q", "test"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[0].documentId").value(5))
-                .andExpect(jsonPath("$.results[0].content").value("Full document content here"))
-                .andExpect(jsonPath("$.results[0].score").value(0.87));
+                        .param("query", "test"));
+
+        // Then - verify service was called exactly once
+        verify(searchService, times(1)).search(any(SearchRequest.class));
+        verifyNoMoreInteractions(searchService);
     }
 }
 
