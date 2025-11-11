@@ -113,22 +113,29 @@ class CrawlerServiceTest {
 
     // ============================================
     // TEST 4: Crawl with invalid URL
-    // NOTE: This test is commented out because CrawlerService
-    // needs try-catch around Jsoup.connect() to handle malformed URLs
     // ============================================
 
-    // @Test
-    // void testCrawlWithInvalidUrl() {
-    //     CrawlRequest request = CrawlRequest.builder()
-    //             .startUrl("not-a-valid-url")
-    //             .maxPages(5)
-    //             .maxDepth(2)
-    //             .delayMs(100L)
-    //             .build();
-    //     CrawlResult result = crawlerService.crawl(request);
-    //     assertNotNull(result);
-    //     assertEquals("FAILED", result.getStatus());
-    // }
+    @Test
+    void testCrawlWithInvalidUrl() {
+        // Given
+        CrawlRequest request = CrawlRequest.builder()
+                .startUrl("not-a-valid-url")
+                .maxPages(5)
+                .maxDepth(2)
+                .delayMs(100L)
+                .build();
+
+        // When
+        CrawlResult result = crawlerService.crawl(request);
+
+        // Then
+        assertNotNull(result);
+        assertEquals("FAILED", result.getStatus());
+        assertEquals(0, result.getPagesProcessed());
+        assertEquals(0, result.getDocumentsIndexed());
+        assertTrue(result.getErrorCount() > 0);
+        assertFalse(result.getErrors().isEmpty());
+    }
 
 
     // ============================================
@@ -304,36 +311,47 @@ class CrawlerServiceTest {
 
     // ============================================
     // TEST 12: Empty/null URL handling
-    // NOTE: Commented out until validation is added to CrawlerService
     // ============================================
 
-    // @Test
-    // void testCrawlWithNullUrl() {
-    //     CrawlRequest request = CrawlRequest.builder()
-    //             .startUrl(null)
-    //             .maxPages(5)
-    //             .maxDepth(2)
-    //             .delayMs(100L)
-    //             .build();
-    //     CrawlResult result = crawlerService.crawl(request);
-    //     assertNotNull(result);
-    //     assertEquals("FAILED", result.getStatus());
-    //     assertTrue(result.getErrorCount() > 0);
-    // }
+    @Test
+    void testCrawlWithNullUrl() {
+        // Given
+        CrawlRequest request = CrawlRequest.builder()
+                .startUrl(null)
+                .maxPages(5)
+                .maxDepth(2)
+                .delayMs(100L)
+                .build();
 
-    // @Test
-    // void testCrawlWithEmptyUrl() {
-    //     CrawlRequest request = CrawlRequest.builder()
-    //             .startUrl("")
-    //             .maxPages(5)
-    //             .maxDepth(2)
-    //             .delayMs(100L)
-    //             .build();
-    //     CrawlResult result = crawlerService.crawl(request);
-    //     assertNotNull(result);
-    //     assertEquals("FAILED", result.getStatus());
-    //     assertTrue(result.getErrorCount() > 0);
-    // }
+        // When
+        CrawlResult result = crawlerService.crawl(request);
+
+        // Then
+        assertNotNull(result);
+        assertEquals("FAILED", result.getStatus());
+        assertTrue(result.getErrorCount() > 0);
+        assertTrue(result.getErrors().get(0).contains("null or empty"));
+    }
+
+    @Test
+    void testCrawlWithEmptyUrl() {
+        // Given
+        CrawlRequest request = CrawlRequest.builder()
+                .startUrl("")
+                .maxPages(5)
+                .maxDepth(2)
+                .delayMs(100L)
+                .build();
+
+        // When
+        CrawlResult result = crawlerService.crawl(request);
+
+        // Then
+        assertNotNull(result);
+        assertEquals("FAILED", result.getStatus());
+        assertTrue(result.getErrorCount() > 0);
+        assertTrue(result.getErrors().get(0).contains("null or empty"));
+    }
 
 
 

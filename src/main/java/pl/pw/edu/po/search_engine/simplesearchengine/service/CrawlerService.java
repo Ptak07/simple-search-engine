@@ -34,6 +34,22 @@ public class CrawlerService {
     public CrawlResult crawl(CrawlRequest request) {
         long startTime = System.currentTimeMillis();
 
+        // Validate start URL - null/empty check
+        if (request.getStartUrl() == null || request.getStartUrl().trim().isEmpty()) {
+            log.error("Start URL is null or empty");
+            return buildErrorResult(startTime, 0, 0,
+                List.of("Start URL is null or empty"));
+        }
+
+        // Validate URL format
+        try {
+            new java.net.URI(request.getStartUrl()).toURL();
+        } catch (Exception e) {
+            log.error("Invalid URL format: {}", request.getStartUrl());
+            return buildErrorResult(startTime, 0, 0,
+                List.of("Invalid URL format: " + e.getMessage()));
+        }
+
         log.info("Starting crawler for URL: {}", request.getStartUrl());
         log.info("Settings: maxPages={}, maxDepth={}, delayMs={}",
                 request.getMaxPages(), request.getMaxDepth(), request.getDelayMs());
@@ -175,6 +191,23 @@ public class CrawlerService {
         } catch (Exception e) {
             return false;  // Invalid URL
         }
+    }
+
+    /**
+     * Build error result for failed crawling.
+     */
+    private CrawlResult buildErrorResult(long startTime, int pagesProcessed,
+                                         int documentsIndexed, List<String> errors) {
+        long crawlTimeMs = System.currentTimeMillis() - startTime;
+
+        return CrawlResult.builder()
+                .status("FAILED")
+                .pagesProcessed(pagesProcessed)
+                .documentsIndexed(documentsIndexed)
+                .errorCount(errors.size())
+                .errors(errors)
+                .crawlTimeMs(crawlTimeMs)
+                .build();
     }
 
     /**
