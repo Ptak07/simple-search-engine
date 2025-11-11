@@ -1,45 +1,41 @@
 package pl.pw.edu.po.search_engine.simplesearchengine.controller;
 
-import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResponse;
-import pl.pw.edu.po.search_engine.simplesearchengine.service.IndexingService;
 import pl.pw.edu.po.search_engine.simplesearchengine.service.SearchService;
 
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
+@Slf4j
 public class SearchController {
 
-    private final IndexingService indexingService;
     private final SearchService searchService;
 
-    // Constructor-based dependency injection
-    public SearchController(IndexingService indexingService, SearchService searchService) {
-        this.indexingService = indexingService;
-        this.searchService = searchService;
-    }
-
-    // Note: POST /api/documents moved to DocumentController
-
     /**
-     * GET /api/index
-     * Lets you view the current state of the inverted index.
-     */
-    @GetMapping("/index")
-    public String printIndex() {
-        indexingService.printIndex();
-        return "Index printed to console.";
-    }
-
-    /**
-     * GET /api/search?q=your+query
-     * Searches documents and returns ranked results.
+     * GET /api/search?query=...&limit=10&offset=0
+     * Searches documents with pagination and returns ranked results with snippets.
      */
     @GetMapping("/search")
-    public ResponseEntity<SearchResponse> search(@RequestParam("q") String query) {
-        SearchResponse response = searchService.search(query);
-        return new ResponseEntity<>(response, HttpStatus.OK);
+    public ResponseEntity<SearchResponse> search(
+            @RequestParam(required = true) String query,
+            @RequestParam(defaultValue = "10") Integer limit,
+            @RequestParam(defaultValue = "0") Integer offset) {
+
+        log.info("GET /api/search - query: '{}', limit: {}, offset: {}", query, limit, offset);
+
+        SearchRequest request = SearchRequest.builder()
+                .query(query)
+                .limit(limit)
+                .offset(offset)
+                .build();
+
+        SearchResponse response = searchService.search(request);
+        return ResponseEntity.ok(response);
     }
 
 }

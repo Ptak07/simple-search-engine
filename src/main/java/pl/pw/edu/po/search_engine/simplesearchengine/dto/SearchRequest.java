@@ -5,17 +5,17 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SearchResponse {
+public class SearchRequest {
     private String query;
-    private Long totalResults;
-    private Integer limit;
-    private Integer offset;
-    private List<SearchResult> results;
-    private Long searchTimeMs;
+
+    @Builder.Default
+    private Integer limit = 10;
+
+    @Builder.Default
+    private Integer offset = 0;
 }
+
