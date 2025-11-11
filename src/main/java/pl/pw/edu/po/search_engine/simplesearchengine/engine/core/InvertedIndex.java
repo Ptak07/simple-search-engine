@@ -1,9 +1,11 @@
 package pl.pw.edu.po.search_engine.simplesearchengine.engine.core;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.*;
 
 public class InvertedIndex implements Serializable {
+    @Serial
     private static final long serialVersionUID = 1L;
 
     // Mapping: term -> (document ID -> term positions)
@@ -15,7 +17,7 @@ public class InvertedIndex implements Serializable {
     private int nextDocId;
 
     /**
-     * Add documents to the inverted index.
+     * Add documents to the inverted index (auto-generated ID).
      *
      * @param content processed document content
      * @param tokens tokenized content
@@ -35,6 +37,32 @@ public class InvertedIndex implements Serializable {
         }
 
         return docId;
+    }
+
+    /**
+     * Add document with specific ID (for PostgreSQL integration).
+     * Use this when you want to sync InvertedIndex with external database IDs.
+     *
+     * @param docId specific document ID (from PostgreSQL)
+     * @param content document content
+     * @param tokens tokenized content
+     */
+    public synchronized void addDocument(int docId, String content, List<String> tokens) {
+        forwardIndex.put(docId, content);
+
+        for (int position = 0; position < tokens.size(); position++) {
+            String term = tokens.get(position);
+
+            index
+                    .computeIfAbsent(term, k -> new HashMap<>())
+                    .computeIfAbsent(docId, k -> new ArrayList<>())
+                    .add(position);
+        }
+
+        // Update nextDocId to avoid conflicts
+        if (docId >= nextDocId) {
+            nextDocId = docId + 1;
+        }
     }
 
     /**

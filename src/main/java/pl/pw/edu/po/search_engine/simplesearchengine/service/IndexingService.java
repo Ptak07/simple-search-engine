@@ -41,7 +41,7 @@ public class IndexingService {
     public void addDocument(String docId, String content) {
         log.debug("Adding document to index: docId={}", docId);
         List<String> tokens = textPreprocessor.process(content);
-        invertedIndex.addDocument(content, tokens);
+        invertedIndex.addDocument(Integer.parseInt(docId), content, tokens);
     }
 
     /**
