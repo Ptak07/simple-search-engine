@@ -10,6 +10,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlResult;
+import pl.pw.edu.po.search_engine.simplesearchengine.repository.CrawlHistoryRepository;
 import pl.pw.edu.po.search_engine.simplesearchengine.service.CrawlerService;
 
 import java.util.Collections;
@@ -35,6 +36,9 @@ class CrawlerControllerTest {
 
     @MockitoBean
     private CrawlerService crawlerService;
+
+    @MockitoBean
+    private CrawlHistoryRepository crawlHistoryRepository;
 
     @BeforeEach
     void setUp() {

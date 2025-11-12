@@ -41,8 +41,13 @@ public class Document {
     // Hibernate lifecycle callback
     @PrePersist
     protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) {
-            createdAt = LocalDateTime.now();
+            createdAt = now;
+        }
+        // Set updatedAt on creation too (will be same as createdAt initially)
+        if (updatedAt == null) {
+            updatedAt = now;
         }
     }
 

@@ -13,8 +13,11 @@ import org.jsoup.select.Elements;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlResult;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
+import pl.pw.edu.po.search_engine.simplesearchengine.model.CrawlHistory;
+import pl.pw.edu.po.search_engine.simplesearchengine.repository.CrawlHistoryRepository;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -24,6 +27,7 @@ import java.util.*;
 public class CrawlerService {
 
     private final DocumentService documentService;
+    private final CrawlHistoryRepository crawlHistoryRepository;
 
     // Timout for HTTP requests (30 seconds)
     private static final int TIMEOUT_MS = 30000;
@@ -49,6 +53,17 @@ public class CrawlerService {
             return buildErrorResult(startTime, 0, 0,
                 List.of("Invalid URL format: " + e.getMessage()));
         }
+
+        // SAVE crawl history to database (STARTED status)
+        CrawlHistory history = CrawlHistory.builder()
+                .startUrl(request.getStartUrl())
+                .startedAt(LocalDateTime.now())
+                .status("STARTED")
+                .pagesCrawled(0)
+                .documentsIndexed(0)
+                .build();
+        history = crawlHistoryRepository.save(history);
+        log.info("📝 Crawl history saved with ID: {}", history.getId());
 
         log.info("Starting crawler for URL: {}", request.getStartUrl());
         log.info("Settings: maxPages={}, maxDepth={}, delayMs={}",
@@ -142,6 +157,19 @@ public class CrawlerService {
 
         log.info("🎉 Crawl finished: {} pages, {} indexed, {} errors in {}ms",
                 pagesProcessed, documentsIndexed, errors.size(), crawlTimeMs);
+
+        // UPDATE crawl history in database (FINISHED status)
+        history.setFinishedAt(LocalDateTime.now());
+        history.setStatus(status);
+        history.setPagesCrawled(pagesProcessed);
+        history.setDocumentsIndexed(documentsIndexed);
+        history.setDurationMs(crawlTimeMs);
+        if (!errors.isEmpty()) {
+            history.setErrorMessage(String.join("; ", errors));
+        }
+        crawlHistoryRepository.save(history);
+        log.info("Crawl history updated: status={}, pages={}, indexed={}",
+                status, pagesProcessed, documentsIndexed);
 
         return CrawlResult.builder()
                 .status(status)

@@ -6,6 +6,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlResult;
+import pl.pw.edu.po.search_engine.simplesearchengine.model.CrawlHistory;
+import pl.pw.edu.po.search_engine.simplesearchengine.repository.CrawlHistoryRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,12 +29,26 @@ class CrawlerServiceTest {
     @Mock
     private DocumentService documentService;
 
+    @Mock
+    private CrawlHistoryRepository crawlHistoryRepository;
+
     private CrawlerService crawlerService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        crawlerService = new CrawlerService(documentService);
+
+        // Mock repository behavior - return the saved entity with ID
+        when(crawlHistoryRepository.save(any(CrawlHistory.class)))
+            .thenAnswer(invocation -> {
+                CrawlHistory history = invocation.getArgument(0);
+                if (history.getId() == null) {
+                    history.setId(1L); // Simulate auto-generated ID
+                }
+                return history;
+            });
+
+        crawlerService = new CrawlerService(documentService, crawlHistoryRepository);
     }
 
     // ============================================
