@@ -8,7 +8,6 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlResult;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
@@ -190,7 +189,7 @@ public class CrawlerService {
 
                 // Process document if it has sufficient content
                 if (content.length() > MIN_CONTENT_LENGTH) {
-                    indexDocument(url, title, content);
+                    indexDocument(url, title, content, request.getLanguage());
                     documentsIndexed++;
 
                     log.info("Indexed: {} ({})", title, url);
@@ -239,11 +238,12 @@ public class CrawlerService {
      * @param title document title
      * @param content document content
      */
-    private void indexDocument(String url, String title, String content) {
+    private void indexDocument(String url, String title, String content, String language) {
         DocumentRequest docRequest = DocumentRequest.builder()
                 .title(title)
                 .content(content)
                 .url(url)
+                .language(language)
                 .build();
         documentService.addOrUpdateDocument(docRequest);
     }

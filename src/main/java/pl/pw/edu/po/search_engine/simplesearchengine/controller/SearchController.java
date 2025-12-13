@@ -17,21 +17,29 @@ public class SearchController {
     private final SearchService searchService;
 
     /**
-     * GET /api/search?query=...&limit=10&offset=0
+     * GET /api/search?query=...&limit=10&offset=0&language=pl
      * Searches documents with pagination and returns ranked results with snippets.
+     *
+     * @param query search query
+     * @param limit number of results per page
+     * @param offset starting position
+     * @param language language code ("pl" or "en"), defaults to "pl"
      */
     @GetMapping("/search")
     public ResponseEntity<SearchResponse> search(
             @RequestParam(required = true) String query,
             @RequestParam(defaultValue = "10") Integer limit,
-            @RequestParam(defaultValue = "0") Integer offset) {
+            @RequestParam(defaultValue = "0") Integer offset,
+            @RequestParam(defaultValue = "pl") String language) {
 
-        log.info("GET /api/search - query: '{}', limit: {}, offset: {}", query, limit, offset);
+        log.info("GET /api/search - query: '{}', limit: {}, offset: {}, language: {}",
+                query, limit, offset, language);
 
         SearchRequest request = SearchRequest.builder()
                 .query(query)
                 .limit(limit)
                 .offset(offset)
+                .language(language)
                 .build();
 
         SearchResponse response = searchService.search(request);
