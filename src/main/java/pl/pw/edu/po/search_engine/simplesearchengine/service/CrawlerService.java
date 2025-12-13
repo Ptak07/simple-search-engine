@@ -2,15 +2,13 @@ package pl.pw.edu.po.search_engine.simplesearchengine.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
-
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.CrawlResult;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
@@ -21,7 +19,10 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
-
+/**
+ * Service responsible for web crawling functionality.
+ * Supports both synchronous and asynchronous crawling modes.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -30,17 +31,19 @@ public class CrawlerService {
     private final DocumentService documentService;
     private final CrawlHistoryRepository crawlHistoryRepository;
 
-    // Timout for HTTP requests (30 seconds)
     private static final int TIMEOUT_MS = 30000;
-
-    // User-Agent - identify the crawler as a bot
     private static final String USER_AGENT = "SimpleSearchEngineBot/1.0";
+    private static final int MIN_CONTENT_LENGTH = 100;
 
     /**
      * Start crawling asynchronously in background.
-     * Returns CrawlHistory ID immediately, actual crawling happens in separate thread.
+     * This method is executed in a separate thread managed by Spring's task executor.
+     *
+     * @param request the crawl configuration
+     * @param historyId the ID of the crawl history record to update
      */
     @Async("taskExecutor")
+    @Transactional(timeout = 3600)
     public void crawlAsync(CrawlRequest request, Long historyId) {
         CrawlHistory history = crawlHistoryRepository.findById(historyId)
                 .orElseThrow(() -> new RuntimeException("CrawlHistory not found: " + historyId));
@@ -49,41 +52,68 @@ public class CrawlerService {
     }
 
     /**
-     * Start crawling synchronously (for testing or direct calls).
-     * This method blocks until crawling is complete.
+     * Start crawling synchronously.
+     * This method blocks until crawling is complete and returns the result.
+     *
+     * @param request the crawl configuration
+     * @return crawl result with statistics and any errors
      */
     public CrawlResult crawl(CrawlRequest request) {
         long startTime = System.currentTimeMillis();
 
-        // Validate start URL - null/empty check
-        if (request.getStartUrl() == null || request.getStartUrl().trim().isEmpty()) {
-            log.error("Start URL is null or empty");
-            return buildErrorResult(startTime, 0, 0,
-                List.of("Start URL is null or empty"));
+        // Validate URL
+        String validationError = validateUrl(request.getStartUrl());
+        if (validationError != null) {
+            log.error("URL validation failed: {}", validationError);
+            return buildErrorResult(startTime, List.of(validationError));
         }
 
-        // Validate URL format
+        // Create crawl history record
+        CrawlHistory history = createCrawlHistory(request.getStartUrl());
+        log.info("Crawl history saved with ID: {}", history.getId());
+
+        return crawlInternal(request, history);
+    }
+
+    /**
+     * Validates URL format and non-emptiness.
+     *
+     * @param url the URL to validate
+     * @return error message if invalid, null if valid
+     */
+    private String validateUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return "Start URL is null or empty";
+        }
+
         try {
-            new java.net.URI(request.getStartUrl()).toURL();
+            // Validate URL format by attempting to parse it
+            java.net.URL parsedUrl = new java.net.URI(url).toURL();
+            // Check if URL is valid (not null and has proper format)
+            if (parsedUrl.getProtocol() == null || parsedUrl.getHost() == null) {
+                return "Invalid URL: missing protocol or host";
+            }
+            return null;
         } catch (Exception e) {
-            log.error("Invalid URL format: {}", request.getStartUrl());
-            return buildErrorResult(startTime, 0, 0,
-                List.of("Invalid URL format: " + e.getMessage()));
+            return "Invalid URL format: " + e.getMessage();
         }
+    }
 
-        // SAVE crawl history to database (STARTED status)
+    /**
+     * Creates and saves a new crawl history record with STARTED status.
+     *
+     * @param startUrl the starting URL for the crawl
+     * @return saved crawl history entity
+     */
+    private CrawlHistory createCrawlHistory(String startUrl) {
         CrawlHistory history = CrawlHistory.builder()
-                .startUrl(request.getStartUrl())
+                .startUrl(startUrl)
                 .startedAt(LocalDateTime.now())
                 .status("STARTED")
                 .pagesCrawled(0)
                 .documentsIndexed(0)
                 .build();
-        history = crawlHistoryRepository.save(history);
-        log.info("📝 Crawl history saved with ID: {}", history.getId());
-
-        // Perform actual crawling
-        return crawlInternal(request, history);
+        return crawlHistoryRepository.save(history);
     }
 
     /**
@@ -122,9 +152,12 @@ public class CrawlerService {
             log.info("Crawling [depth={}]: {}", depth, url);
 
             try {
+                // Throttling: delay between requests to avoid overwhelming the server
+                // This is intentional rate limiting, not busy-waiting
                 if (pagesProcessed > 0) {
-                    // Intentional delay to avoid overloading target servers (throttling)
-                    Thread.sleep(request.getDelayMs());
+                    @SuppressWarnings("BusyWait")
+                    long delay = request.getDelayMs();
+                    Thread.sleep(delay);
                 }
 
                 Document doc = Jsoup.connect(url)
@@ -137,16 +170,9 @@ public class CrawlerService {
                 String title = doc.title();
                 String content = doc.body().text();
 
-                // Sprawdź czy strona ma treść
-                if (content.length() > 100) {  // ← Min 100 znaków
-                    // Dodaj do search engine (lub zaktualizuj jeśli URL już istnieje)
-                    DocumentRequest docRequest = DocumentRequest.builder()
-                            .title(title)
-                            .content(content)
-                            .url(url)
-                            .build();
-
-                    documentService.addOrUpdateDocument(docRequest);
+                // Process document if it has sufficient content
+                if (content.length() > MIN_CONTENT_LENGTH) {
+                    indexDocument(url, title, content);
                     documentsIndexed++;
 
                     log.info("Indexed: {} ({})", title, url);
@@ -154,51 +180,120 @@ public class CrawlerService {
                     log.warn("Skipped (too short): {}", url);
                 }
 
+                // Extract and queue links if depth limit not reached
                 if (depth < request.getMaxDepth()) {
-                    Elements links = doc.select("a[href]");
-
-                    for (Element link : links) {
-                        String linkUrl = link.absUrl("href");  // ← Absolutny URL
-
-                        // Filtruj linki
-                        if (isValidUrl(linkUrl, request.getStartUrl())) {
-                            urlQueue.add(new UrlWithDepth(linkUrl, depth + 1));
-                        }
-                    }
-
-                    log.debug("Found {} links at depth {}", links.size(), depth);
+                    int linksAdded = extractAndQueueLinks(doc, request.getStartUrl(), urlQueue, depth);
+                    log.debug("Found {} valid links at depth {}", linksAdded, depth);
                 }
 
-            } catch(IOException e) {
+            } catch (IOException e) {
                 String error = "Failed to fetch " + url + ": " + e.getMessage();
                 errors.add(error);
-                log.error("❌ {}", error);
+                log.error("Error: {}", error);
             } catch (InterruptedException e) {
+                log.warn("Crawling interrupted");
                 Thread.currentThread().interrupt();
                 break;
             }
         }
 
+        // Finalize crawl
         long crawlTimeMs = System.currentTimeMillis() - startTime;
-        String status = errors.isEmpty() ? "SUCCESS" :
-                (documentsIndexed > 0 ? "PARTIAL" : "FAILED");
+        String status = determineStatus(errors.isEmpty(), documentsIndexed);
 
-        log.info("🎉 Crawl finished: {} pages, {} indexed, {} errors in {}ms",
+        log.info("Crawl finished: {} pages, {} indexed, {} errors in {}ms",
                 pagesProcessed, documentsIndexed, errors.size(), crawlTimeMs);
 
-        // UPDATE crawl history in database (FINISHED status)
+        updateCrawlHistory(history, status, pagesProcessed, documentsIndexed, crawlTimeMs, errors);
+
+        return buildCrawlResult(status, pagesProcessed, documentsIndexed, errors, crawlTimeMs);
+    }
+
+    /**
+     * Indexes a document by adding it to the search engine.
+     *
+     * @param url document URL
+     * @param title document title
+     * @param content document content
+     */
+    private void indexDocument(String url, String title, String content) {
+        DocumentRequest docRequest = DocumentRequest.builder()
+                .title(title)
+                .content(content)
+                .url(url)
+                .build();
+        documentService.addOrUpdateDocument(docRequest);
+    }
+
+    /**
+     * Extracts links from a document and adds them to the crawl queue.
+     *
+     * @param doc the Jsoup document
+     * @param startUrl the starting URL (for validation)
+     * @param urlQueue the queue to add URLs to
+     * @param currentDepth the current crawl depth
+     * @return number of links added to queue
+     */
+    private int extractAndQueueLinks(Document doc, String startUrl, Queue<UrlWithDepth> urlQueue, int currentDepth) {
+        Elements links = doc.select("a[href]");
+        int addedCount = 0;
+
+        for (Element link : links) {
+            String linkUrl = link.absUrl("href");
+            if (isValidUrl(linkUrl, startUrl)) {
+                urlQueue.add(new UrlWithDepth(linkUrl, currentDepth + 1));
+                addedCount++;
+            }
+        }
+
+        return addedCount;
+    }
+
+    /**
+     * Determines the final status of the crawl based on errors and indexed documents.
+     *
+     * @param noErrors true if no errors occurred
+     * @param documentsIndexed number of documents successfully indexed
+     * @return status string (SUCCESS, PARTIAL, or FAILED)
+     */
+    private String determineStatus(boolean noErrors, int documentsIndexed) {
+        if (noErrors) {
+            return "SUCCESS";
+        }
+        return documentsIndexed > 0 ? "PARTIAL" : "FAILED";
+    }
+
+    /**
+     * Updates the crawl history record with final results.
+     *
+     * @param history the crawl history entity
+     * @param status final status
+     * @param pagesCrawled number of pages crawled
+     * @param documentsIndexed number of documents indexed
+     * @param durationMs crawl duration in milliseconds
+     * @param errors list of error messages
+     */
+    private void updateCrawlHistory(CrawlHistory history, String status, int pagesCrawled,
+                                   int documentsIndexed, long durationMs, List<String> errors) {
         history.setFinishedAt(LocalDateTime.now());
         history.setStatus(status);
-        history.setPagesCrawled(pagesProcessed);
+        history.setPagesCrawled(pagesCrawled);
         history.setDocumentsIndexed(documentsIndexed);
-        history.setDurationMs(crawlTimeMs);
+        history.setDurationMs(durationMs);
+
         if (!errors.isEmpty()) {
             history.setErrorMessage(String.join("; ", errors));
         }
-        crawlHistoryRepository.save(history);
-        log.info("Crawl history updated: status={}, pages={}, indexed={}",
-                status, pagesProcessed, documentsIndexed);
 
+        crawlHistoryRepository.save(history);
+        log.info("Crawl history updated: status={}, pages={}, indexed={}", status, pagesCrawled, documentsIndexed);
+    }
+
+    /**
+     * Builds a CrawlResult object with statistics and errors.
+     */
+    private CrawlResult buildCrawlResult(String status, int pagesProcessed, int documentsIndexed,
+                                        List<String> errors, long crawlTimeMs) {
         return CrawlResult.builder()
                 .status(status)
                 .pagesProcessed(pagesProcessed)
@@ -210,11 +305,15 @@ public class CrawlerService {
     }
 
     /**
-     * Validates if URL should be crawled.
+     * Validates if a URL should be crawled.
      * Filters out:
      * - URLs from different domains
-     * - File downloads (PDF, ZIP, JPG, etc.)
-     * - Fragments (#section)
+     * - File downloads (PDF, ZIP, images, etc.)
+     * - URL fragments (#section)
+     *
+     * @param url the URL to validate
+     * @param startUrl the starting URL (for domain comparison)
+     * @return true if URL should be crawled, false otherwise
      */
     private boolean isValidUrl(String url, String startUrl) {
         if (url == null || url.isEmpty()) {
@@ -222,44 +321,62 @@ public class CrawlerService {
         }
 
         try {
-            // Parse URLs (using URI to avoid deprecated URL constructor)
             java.net.URL urlObj = new java.net.URI(url).toURL();
             java.net.URL startUrlObj = new java.net.URI(startUrl).toURL();
 
-            // Check if same domain (stay on same website)
+            // Only crawl URLs from the same domain
             if (!urlObj.getHost().equals(startUrlObj.getHost())) {
-                return false;  // Different domain
+                return false;
             }
 
-            // Filter out common file extensions
-            String path = urlObj.getPath().toLowerCase();
-            String[] excludedExtensions = {".pdf", ".zip", ".jpg", ".jpeg", ".png", ".gif",
-                                           ".doc", ".docx", ".xls", ".xlsx", ".mp3", ".mp4"};
-            for (String ext : excludedExtensions) {
-                if (path.endsWith(ext)) {
-                    return false;  // File download
-                }
+            // Filter out file downloads
+            if (isFileDownload(urlObj.getPath())) {
+                return false;
             }
 
-            // Filter out fragments (#section)
+            // Filter out URL fragments
             return urlObj.getRef() == null;
 
         } catch (Exception e) {
-            return false;  // Invalid URL
+            return false;
         }
     }
 
     /**
-     * Build error result for failed crawling.
+     * Checks if a URL path points to a file download.
+     *
+     * @param path the URL path
+     * @return true if it's a file download, false otherwise
      */
-    private CrawlResult buildErrorResult(long startTime, int pagesProcessed,
-                                         int documentsIndexed, List<String> errors) {
+    private boolean isFileDownload(String path) {
+        String lowerPath = path.toLowerCase();
+        String[] excludedExtensions = {
+                ".pdf", ".zip", ".jpg", ".jpeg", ".png", ".gif",
+                ".doc", ".docx", ".xls", ".xlsx", ".mp3", ".mp4"
+        };
+
+        for (String ext : excludedExtensions) {
+            if (lowerPath.endsWith(ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Builds an error result for failed crawling attempts (validation errors).
+     *
+     * @param startTime crawl start time in milliseconds
+     * @param errors list of error messages
+     * @return CrawlResult with FAILED status
+     */
+    private CrawlResult buildErrorResult(long startTime, List<String> errors) {
         long crawlTimeMs = System.currentTimeMillis() - startTime;
 
         return CrawlResult.builder()
                 .status("FAILED")
-                .pagesProcessed(pagesProcessed)
-                .documentsIndexed(documentsIndexed)
+                .pagesProcessed(0)
+                .documentsIndexed(0)
                 .errorCount(errors.size())
                 .errors(errors)
                 .crawlTimeMs(crawlTimeMs)
@@ -269,6 +386,9 @@ public class CrawlerService {
     /**
      * Helper record to store URL with its depth level.
      * Used for BFS (Breadth-First Search) crawling.
+     *
+     * @param url the URL to crawl
+     * @param depth the depth level in the crawl tree
      */
     private record UrlWithDepth(String url, int depth) {}
 }

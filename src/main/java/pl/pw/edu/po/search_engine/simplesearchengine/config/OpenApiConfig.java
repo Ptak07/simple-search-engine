@@ -19,7 +19,7 @@ public class OpenApiConfig {
                                 "Supports CRUD operations, TF-IDF ranking, and future web crawling capabilities.")
                         .contact(new Contact()
                                 .name("Search Engine Team")
-                                .url("https://github.com/yourusername/simple-search-engine")));
+                                .url("https://github.com/Ptak07/simple-search-engine")));
     }
 }
 
