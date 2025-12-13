@@ -5,11 +5,12 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.pl.PolishAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 
+import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PolishTextPreprocessor {
+public class PolishTextPreprocessor implements TextProcessor {
 
     private final PolishAnalyzer analyzer;
 
@@ -23,8 +24,7 @@ public class PolishTextPreprocessor {
         }
 
         List<String> tokens = new ArrayList<>();
-        try {
-            TokenStream tokenStream = analyzer.tokenStream("content", new StringReader(text));
+        try (TokenStream tokenStream = analyzer.tokenStream("content", new StringReader(text))) {
             CharTermAttribute termAttribute = tokenStream.addAttribute(CharTermAttribute.class);
             tokenStream.reset();
 
@@ -33,7 +33,7 @@ public class PolishTextPreprocessor {
                 tokens.add(token);
             }
             tokenStream.end();
-        } catch (Exception e) {
+        } catch (IOException e) {
             throw new RuntimeException("Error processing Polish text", e);
         }
 
