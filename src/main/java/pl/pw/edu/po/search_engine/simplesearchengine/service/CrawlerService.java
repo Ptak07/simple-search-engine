@@ -34,6 +34,8 @@ public class CrawlerService {
     private static final int TIMEOUT_MS = 30000;
     private static final String USER_AGENT = "SimpleSearchEngineBot/1.0";
     private static final int MIN_CONTENT_LENGTH = 100;
+    private static final long MAX_CRAWL_DURATION_MS = 3600000; // 1 hour max per crawl
+    private final Map<Long, Boolean> activeCrawls = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Start crawling asynchronously in background.
@@ -43,12 +45,16 @@ public class CrawlerService {
      * @param historyId the ID of the crawl history record to update
      */
     @Async("taskExecutor")
-    @Transactional(timeout = 3600)
     public void crawlAsync(CrawlRequest request, Long historyId) {
         CrawlHistory history = crawlHistoryRepository.findById(historyId)
                 .orElseThrow(() -> new RuntimeException("CrawlHistory not found: " + historyId));
+        activeCrawls.put(historyId, true);
 
-        crawlInternal(request, history);
+        try {
+            crawlInternal(request, history);
+        } finally {
+            activeCrawls.remove(historyId);
+        }
     }
 
     /**
@@ -139,6 +145,22 @@ public class CrawlerService {
         urlQueue.add(new UrlWithDepth(request.getStartUrl(), 0));
 
         while (!urlQueue.isEmpty() && pagesProcessed < request.getMaxPages()) {
+            if (isCrawlCancelled(history.getId())) {
+                String cancelMsg = "Crawl cancelled by user";
+                errors.add(cancelMsg);
+                log.info(cancelMsg);
+                break;
+            }
+
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            if (elapsedTime > MAX_CRAWL_DURATION_MS) {
+                String timeoutMsg = String.format("Crawl timeout after %d ms (limit: %d ms)",
+                                                 elapsedTime, MAX_CRAWL_DURATION_MS);
+                errors.add(timeoutMsg);
+                log.warn(timeoutMsg);
+                break;
+            }
+
             UrlWithDepth current = urlQueue.poll();
             String url = current.url;
             int depth = current.depth;
@@ -152,12 +174,8 @@ public class CrawlerService {
             log.info("Crawling [depth={}]: {}", depth, url);
 
             try {
-                // Throttling: delay between requests to avoid overwhelming the server
-                // This is intentional rate limiting, not busy-waiting
                 if (pagesProcessed > 0) {
-                    @SuppressWarnings("BusyWait")
-                    long delay = request.getDelayMs();
-                    Thread.sleep(delay);
+                    Thread.sleep(request.getDelayMs());
                 }
 
                 Document doc = Jsoup.connect(url)
@@ -199,7 +217,12 @@ public class CrawlerService {
 
         // Finalize crawl
         long crawlTimeMs = System.currentTimeMillis() - startTime;
-        String status = determineStatus(errors.isEmpty(), documentsIndexed);
+
+        // Check if crawl was cancelled
+        boolean wasCancelled = errors.stream()
+                .anyMatch(e -> e.contains("cancelled"));
+
+        String status = wasCancelled ? "CANCELLED" : determineStatus(errors.isEmpty(), documentsIndexed);
 
         log.info("Crawl finished: {} pages, {} indexed, {} errors in {}ms",
                 pagesProcessed, documentsIndexed, errors.size(), crawlTimeMs);
@@ -381,6 +404,46 @@ public class CrawlerService {
                 .errors(errors)
                 .crawlTimeMs(crawlTimeMs)
                 .build();
+    }
+
+    /**
+     * Checks if a crawl has been cancelled.
+     *
+     * @param historyId the crawl history ID
+     * @return true if cancelled, false if still active or not tracked (synchronous calls)
+     */
+    private boolean isCrawlCancelled(Long historyId) {
+        Boolean isActive = activeCrawls.get(historyId);
+        return isActive != null && !isActive;
+    }
+
+    /**
+     * Cancel a running crawl.
+     * Sets the cancellation flag for the crawl thread to check.
+     *
+     * @param historyId the ID of the crawl to cancel
+     * @return true if crawl was found and cancelled, false if not found
+     */
+    public boolean cancelCrawl(Long historyId) {
+        Boolean isActive = activeCrawls.get(historyId);
+
+        if (isActive != null && isActive) {
+            log.info("Cancelling crawl with ID: {}", historyId);
+            activeCrawls.put(historyId, false);
+
+            crawlHistoryRepository.findById(historyId).ifPresent(history -> {
+                if ("STARTED".equals(history.getStatus())) {
+                    history.setStatus("CANCELLED");
+                    history.setFinishedAt(java.time.LocalDateTime.now());
+                    crawlHistoryRepository.save(history);
+                }
+            });
+
+            return true;
+        }
+
+        log.warn("Cannot cancel crawl {}: not found or already finished", historyId);
+        return false;
     }
 
     /**

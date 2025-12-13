@@ -120,12 +120,26 @@ public class CrawlerController {
     }
 
     /**
-     * Get all crawl history records.
+     * Get all crawl history records, optionally filtered by status.
      *
-     * @return list of all crawl history records
+     * Examples:
+     * - GET /api/crawler/history → all records
+     * - GET /api/crawler/history?status=SUCCESS → only successful crawls
+     * - GET /api/crawler/history?status=FAILED → only failed crawls
+     *
+     * @param status optional filter by status (SUCCESS, FAILED, PARTIAL, STARTED)
+     * @return list of crawl history records
      */
     @GetMapping("/history")
-    public ResponseEntity<List<CrawlHistory>> getCrawlHistory() {
+    public ResponseEntity<List<CrawlHistory>> getCrawlHistory(
+            @RequestParam(required = false) String status) {
+
+        if (status != null) {
+            log.info("Fetching crawl history with status: {}", status);
+            List<CrawlHistory> history = crawlHistoryRepository.findByStatus(status);
+            return ResponseEntity.ok(history);
+        }
+
         log.info("Fetching all crawl history");
         List<CrawlHistory> history = crawlHistoryRepository.findAll();
         return ResponseEntity.ok(history);
@@ -143,5 +157,33 @@ public class CrawlerController {
         return crawlHistoryRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Cancel a running crawl.
+     * Sets a cancellation flag that the crawler checks periodically.
+     * The crawl will stop at the next iteration.
+     *
+     * @param id the crawl history ID to cancel
+     * @return 200 OK if cancelled, 404 if not found or already finished
+     */
+    @PostMapping("/cancel/{id}")
+    public ResponseEntity<?> cancelCrawl(@PathVariable Long id) {
+        log.info("Request to cancel crawl with ID: {}", id);
+
+        boolean cancelled = crawlerService.cancelCrawl(id);
+
+        if (cancelled) {
+            return ResponseEntity.ok(Map.of(
+                    "message", "Crawl cancellation requested",
+                    "crawlId", id,
+                    "note", "Crawl will stop at the next iteration"
+            ));
+        } else {
+            return ResponseEntity.status(404).body(Map.of(
+                    "error", "Crawl not found or already finished",
+                    "crawlId", id
+            ));
+        }
     }
 }
