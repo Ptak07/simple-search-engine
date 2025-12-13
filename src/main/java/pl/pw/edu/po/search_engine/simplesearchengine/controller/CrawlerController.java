@@ -35,6 +35,51 @@ public class CrawlerController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Start crawling asynchronously - returns immediately with crawl history ID.
+     * Use GET /api/crawler/history/{id} to check progress.
+     */
+    @PostMapping("/start-async")
+    public ResponseEntity<?> startCrawlingAsync(@RequestBody CrawlRequest request) {
+        log.info("POST /api/crawler/start-async - Starting async crawl: {}", request);
+
+        // Validate URL first
+        if (request.getStartUrl() == null || request.getStartUrl().trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("error", "Start URL is required"));
+        }
+
+        try {
+            new java.net.URI(request.getStartUrl()).toURL();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("error", "Invalid URL format: " + e.getMessage()));
+        }
+
+        // Create history record with STARTED status
+        CrawlHistory history = CrawlHistory.builder()
+                .startUrl(request.getStartUrl())
+                .startedAt(java.time.LocalDateTime.now())
+                .status("STARTED")
+                .pagesCrawled(0)
+                .documentsIndexed(0)
+                .build();
+        history = crawlHistoryRepository.save(history);
+
+        log.info("Created crawl history with ID: {}", history.getId());
+
+        // Start crawling in background
+        crawlerService.crawlAsync(request, history.getId());
+
+        // Return immediately with history ID
+        return ResponseEntity.accepted()
+                .body(java.util.Map.of(
+                        "message", "Crawling started in background",
+                        "crawlId", history.getId(),
+                        "statusUrl", "/api/crawler/history/" + history.getId()
+                ));
+    }
+
     @GetMapping("/history")
     public ResponseEntity<List<CrawlHistory>> getCrawlHistory() {
         log.info("GET /api/crawler/history - Fetching crawl history");

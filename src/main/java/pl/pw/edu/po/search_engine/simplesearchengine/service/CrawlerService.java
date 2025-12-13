@@ -3,6 +3,7 @@ package pl.pw.edu.po.search_engine.simplesearchengine.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import org.jsoup.Jsoup;
@@ -35,6 +36,22 @@ public class CrawlerService {
     // User-Agent - identify the crawler as a bot
     private static final String USER_AGENT = "SimpleSearchEngineBot/1.0";
 
+    /**
+     * Start crawling asynchronously in background.
+     * Returns CrawlHistory ID immediately, actual crawling happens in separate thread.
+     */
+    @Async("taskExecutor")
+    public void crawlAsync(CrawlRequest request, Long historyId) {
+        CrawlHistory history = crawlHistoryRepository.findById(historyId)
+                .orElseThrow(() -> new RuntimeException("CrawlHistory not found: " + historyId));
+
+        crawlInternal(request, history);
+    }
+
+    /**
+     * Start crawling synchronously (for testing or direct calls).
+     * This method blocks until crawling is complete.
+     */
     public CrawlResult crawl(CrawlRequest request) {
         long startTime = System.currentTimeMillis();
 
@@ -64,6 +81,17 @@ public class CrawlerService {
                 .build();
         history = crawlHistoryRepository.save(history);
         log.info("📝 Crawl history saved with ID: {}", history.getId());
+
+        // Perform actual crawling
+        return crawlInternal(request, history);
+    }
+
+    /**
+     * Internal method that performs the actual crawling work.
+     * Called by both sync and async versions.
+     */
+    private CrawlResult crawlInternal(CrawlRequest request, CrawlHistory history) {
+        long startTime = System.currentTimeMillis();
 
         log.info("Starting crawler for URL: {}", request.getStartUrl());
         log.info("Settings: maxPages={}, maxDepth={}, delayMs={}",
@@ -111,14 +139,14 @@ public class CrawlerService {
 
                 // Sprawdź czy strona ma treść
                 if (content.length() > 100) {  // ← Min 100 znaków
-                    // Dodaj do search engine
+                    // Dodaj do search engine (lub zaktualizuj jeśli URL już istnieje)
                     DocumentRequest docRequest = DocumentRequest.builder()
                             .title(title)
                             .content(content)
                             .url(url)
                             .build();
 
-                    documentService.addDocument(docRequest);
+                    documentService.addOrUpdateDocument(docRequest);
                     documentsIndexed++;
 
                     log.info("Indexed: {} ({})", title, url);

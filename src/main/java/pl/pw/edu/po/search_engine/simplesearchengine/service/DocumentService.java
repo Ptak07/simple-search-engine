@@ -130,30 +130,51 @@ public class DocumentService {
         return documentRepository.count();
     }
 
+    /**
+     * Add new document or update existing one if URL already exists
+     * This method is useful for crawlers that may revisit pages
+     */
     @Transactional
-    public Document addOrUpdateDocument(String url, String title, String content) {
-        return documentRepository.findByUrl(url)
-                .map(existing -> {
-                    existing.setTitle(title);
-                    existing.setContent(content);
-                    existing.setCrawledAt(LocalDateTime.now());
-                    Document updated = documentRepository.save(existing);
+    public Document addOrUpdateDocument(DocumentRequest request) {
+        log.info("Adding or updating document: {}", request.getUrl());
 
-                    indexingService.removeDocument(String.valueOf(existing.getId()));
-                    indexingService.addDocument(String.valueOf(existing.getId()), content);
+        // Check if document with this URL already exists
+        return documentRepository.findByUrl(request.getUrl())
+                .map(existingDoc -> {
+                    // Document exists - UPDATE
+                    log.info("Document with URL already exists (ID={}), updating...", existingDoc.getId());
 
-                    log.info("Document updated by crawler: ID={}", existing.getId());
+                    existingDoc.setTitle(request.getTitle());
+                    existingDoc.setContent(request.getContent());
+                    existingDoc.setCrawledAt(LocalDateTime.now());  // Update crawl timestamp
+                    // URL remains the same
+
+                    Document updated = documentRepository.save(existingDoc);
+
+                    // Re-index in search engine
+                    indexingService.removeDocument(String.valueOf(existingDoc.getId()));
+                    indexingService.addDocument(String.valueOf(existingDoc.getId()), updated.getContent());
+
+                    log.info("Document updated: ID={}, URL={}", updated.getId(), updated.getUrl());
                     return updated;
                 })
                 .orElseGet(() -> {
-                    Document newDoc = new Document(title, content, url);
-                    newDoc.setCrawledAt(LocalDateTime.now());
-                    Document saved = documentRepository.save(newDoc);
+                    // Document doesn't exist - ADD NEW
+                    log.info("Document doesn't exist, creating new...");
 
-                    indexingService.addDocument(String.valueOf(saved.getId()), content);
+                    Document document = new Document(
+                            request.getTitle(),
+                            request.getContent(),
+                            request.getUrl()
+                    );
+                    document.setCrawledAt(LocalDateTime.now());  // Set initial crawl timestamp
 
-                    log.info("Document added by crawler: ID={}", saved.getId());
-                    return saved;
+                    Document savedDocument = documentRepository.save(document);
+
+                    indexingService.addDocument(String.valueOf(savedDocument.getId()), savedDocument.getContent());
+
+                    log.info("Document added with ID={}, URL={}", savedDocument.getId(), savedDocument.getUrl());
+                    return savedDocument;
                 });
     }
 }
