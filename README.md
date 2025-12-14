@@ -1,226 +1,122 @@
-# 🔍 Simple Search Engine
+# Simple Search Engine
 
-A full-featured search engine built with Java and Spring Boot, featuring web crawling, text indexing, and TF-IDF ranking algorithm.
+Multi-language search engine with web crawling, inverted index, and TF-IDF ranking.
 
-## ✨ Features
+## Features
 
-- **Web Crawler** - Automatic website crawling with depth control
-- **Inverted Index** - Fast document retrieval and search
-- **TF-IDF Ranking** - Intelligent document scoring and ranking
-- **PostgreSQL Database** - Persistent storage for documents and crawl history
-- **REST API** - Complete API for search, crawling, and document management
-- **Swagger UI** - Interactive API documentation
+- **Multi-language support** - Polish (Stempel) & English (Snowball) text processing
+- **Web crawler** - Sync/async crawling with BFS, throttling, cancellation
+- **Full-text search** - Inverted index with TF-IDF ranking
+- **REST API** - Complete CRUD for documents, search, crawler control
+- **PostgreSQL** - Persistent storage with JPA/Hibernate
+- **Thread pool** - Async processing (2-5 workers) with graceful degradation
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Java 21**
-- **Spring Boot 3.5.7**
-- **PostgreSQL** - Database
-- **Jsoup** - Web scraping
-- **Snowball Stemmer** - Text processing
-- **JUnit 5 & Mockito** - Testing
+**Backend:** Java 21, Spring Boot 3.5.7  
+**Database:** PostgreSQL 15+  
+**Text Processing:** Apache Lucene 9.11 (Stempel, Snowball)  
+**Testing:** JUnit 5, Mockito (113 tests)
 
-## 🚀 Quick Start
+## Quick Start
 
-### Prerequisites
-
-- Java 21+
-- Maven 3.6+
-- PostgreSQL 15+
-
-### Setup
-
-1. **Create PostgreSQL database:**
 ```bash
+# 1. Setup database
 psql postgres
 CREATE DATABASE search_engine;
-CREATE USER search_user WITH PASSWORD 'your_password';
+CREATE USER search_user WITH PASSWORD 'search_password';
 GRANT ALL PRIVILEGES ON DATABASE search_engine TO search_user;
 \q
-```
 
-2. **Set environment variables:**
-```bash
-export DB_URL=jdbc:postgresql://localhost:5432/search_engine
-export DB_USERNAME=search_user
-export DB_PASSWORD=your_password
-```
+# 2. Configure
+cp .env.example .env
+# Edit .env with your database credentials
 
-3. **Run the application:**
-```bash
+# 3. Run
 ./mvnw spring-boot:run
+
+# 4. Test
+open http://localhost:8080/swagger-ui/index.html
 ```
 
-4. **Open Swagger UI:**
-```
-http://localhost:8080/swagger-ui.html
-```
+## API Examples
 
-## 📖 API Usage
-
-### Crawl a website
-```http
-POST http://localhost:8080/api/crawler/start
-Content-Type: application/json
-
-{
-  "startUrl": "https://example.com",
-  "maxPages": 10,
-  "maxDepth": 2,
-  "delayMs": 1000
-}
-```
-
-### Search documents
-```http
-GET http://localhost:8080/api/search?query=java+spring&limit=10&offset=0
-```
-
-### Add document manually
-```http
-POST http://localhost:8080/api/documents
-Content-Type: application/json
-
-{
-  "title": "Java Tutorial",
-  "content": "Learn Java programming with examples...",
-  "url": "https://example.com/java"
-}
-```
-
-### Get crawl history
-```http
-GET http://localhost:8080/api/crawler/history
-```
-
-## 🏗️ Architecture
-
-```
-Controller Layer    → REST endpoints
-    ↓
-Service Layer       → Business logic (crawling, indexing, searching)
-    ↓
-Repository Layer    → Database access (Spring Data JPA)
-    ↓
-Database           → PostgreSQL
-```
-
-### Key Components
-
-- **InvertedIndex** - Core data structure for fast text search
-- **TextPreprocessor** - Tokenization, stopword removal, stemming
-- **TfIdfScoringService** - Document ranking algorithm
-- **CrawlerService** - Web scraping with BFS traversal
-
-## 📊 Database Schema
-
-### documents
-```sql
-id, title, content, url, created_at, updated_at, crawled_at
-```
-
-### crawl_history
-```sql
-id, start_url, started_at, finished_at, status, 
-pages_crawled, documents_indexed, duration_ms, error_message
-```
-
-## 🧪 Testing
-
-Run all tests:
+**Search** (Polish default, English optional)
 ```bash
-./mvnw test
+GET /api/search?query=programowanie&language=pl
+GET /api/search?query=programming&language=en&limit=10&offset=0
 ```
 
-The project includes 85+ tests covering:
-- Unit tests (services, algorithms)
-- Integration tests (REST API)
-- All tests passing ✅
+**Documents**
+```bash
+GET    /api/documents
+POST   /api/documents {"title":"...", "content":"...", "language":"pl"}
+PUT    /api/documents/1 {...}
+DELETE /api/documents/1
+```
 
-## 📁 Project Structure
+**Crawler**
+```bash
+POST /api/crawler/start {"startUrl":"https://example.com", "maxPages":10, "language":"en"}
+POST /api/crawler/start-async {...}
+POST /api/crawler/cancel/1
+GET  /api/crawler/history?status=SUCCESS
+```
+
+**System**
+```bash
+GET /swagger-ui/index.html # Interactive API docs
+```
+
+## Architecture
+
+```
+Controller → Service → Repository → PostgreSQL
+                 ↓
+            InvertedIndex (in-memory search)
+```
+
+**Core Components:**  
+`InvertedIndex` - term -> document mapping  
+`TextProcessor` - tokenization, stemming (Stempel/Snowball)  
+`TfIdfScoring` - document ranking  
+`CrawlerService` - BFS web scraping with async execution
+
+**Database:**  
+`document` - id, title, content, url, language, timestamps  
+`crawl_history` - id, start_url, status, pages_crawled, documents_indexed
+
+## Testing
+
+```bash
+./mvnw test  # 113 tests 
+```
+
+## Project Structure
 
 ```
 src/main/java/.../simplesearchengine/
-├── controller/        # REST endpoints
-├── service/           # Business logic
-├── model/             # JPA entities
-├── repository/        # Database access
+├── controller/         # REST API
+├── service/            # Business logic
+├── repository/         # JPA repositories
+├── model/              # Entities
 ├── engine/
-│   ├── core/         # Inverted Index
-│   └── analysis/     # Text preprocessing
-├── dto/              # Data Transfer Objects
-├── exception/        # Custom exceptions
-└── config/           # Configuration
+│   ├── core/          # InvertedIndex, TF-IDF
+│   └── analysis/      # Text processors (Polish/English)
+├── dto/               # Request/Response objects
+└── config/            # Spring configuration
 ```
 
-## 🔧 Configuration
+## How It Works
 
-Edit `src/main/resources/application.properties`:
+1. **Crawl** - Jsoup extracts HTML content  
+2. **Process** - Tokenize → Remove stop words → Stem (Stempel/Snowball)  
+3. **Index** - Store in inverted index (term → document IDs)  
+4. **Search** - Process query → Match terms → Rank by TF-IDF  
+5. **Return** - Top results with snippets
 
-```properties
-# Database
-spring.datasource.url=${DB_URL}
-spring.datasource.username=${DB_USERNAME}
-spring.datasource.password=${DB_PASSWORD}
-
-# Hibernate
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-```
-
-## 📝 How It Works
-
-1. **Crawling** - Jsoup fetches web pages, extracts content
-2. **Preprocessing** - Text is tokenized, normalized, stemmed
-3. **Indexing** - Terms are stored in inverted index structure
-4. **Searching** - Query is processed and matched against index
-5. **Ranking** - TF-IDF algorithm scores and ranks results
-
-### TF-IDF Formula
-```
-score = TF(term, doc) × IDF(term, corpus)
-
-TF  = term frequency in document
-IDF = log(total_docs / docs_containing_term)
-```
-
-## 🎯 Example Workflow
-
-```bash
-# 1. Crawl a website
-curl -X POST http://localhost:8080/api/crawler/start \
-  -H "Content-Type: application/json" \
-  -d '{"startUrl":"https://example.com","maxPages":5,"maxDepth":2,"delayMs":1000}'
-
-# 2. Search for documents
-curl "http://localhost:8080/api/search?query=example&limit=10"
-
-# 3. View crawl history
-curl http://localhost:8080/api/crawler/history
-```
-
-## 🐛 Troubleshooting
-
-**Database connection error:**
-- Check PostgreSQL is running: `brew services list`
-- Verify environment variables are set
-
-**Port 8080 already in use:**
-- Change port in `application.properties`: `server.port=8081`
-
-## 📄 License
-
-This project is open source and available under the MIT License.
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome!
-
-## 👨‍💻 Author
-
-Created as a learning project for building search engines from scratch.
+**TF-IDF:** `score = TF(term, doc) × log(total_docs / docs_with_term)`
 
 ---
 
-**Made with ☕ and Spring Boot**
 
