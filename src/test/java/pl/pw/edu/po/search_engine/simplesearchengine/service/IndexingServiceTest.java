@@ -20,9 +20,18 @@ class IndexingServiceTest {
         indexingService = new IndexingService();
     }
 
+    // Helper method to create English DocumentRequest (tests use English words)
+    private DocumentRequest createEnglishDoc(String title, String content) {
+        return DocumentRequest.builder()
+                .title(title)
+                .content(content)
+                .language("en")
+                .build();
+    }
+
     @Test
     void testIndexSingleDocument() {
-        DocumentRequest request = new DocumentRequest("1", "Hello World");
+        DocumentRequest request = createEnglishDoc("1", "Hello World");
         int docId = indexingService.index(request);
 
         assertEquals(0, docId, "First document should have ID 0");
@@ -31,9 +40,9 @@ class IndexingServiceTest {
 
     @Test
     void testIndexMultipleDocuments() {
-        DocumentRequest req1 = new DocumentRequest("1", "First document");
-        DocumentRequest req2 = new DocumentRequest("2", "Second document");
-        DocumentRequest req3 = new DocumentRequest("3", "Third document");
+        DocumentRequest req1 = createEnglishDoc("1", "First document");
+        DocumentRequest req2 = createEnglishDoc("2", "Second document");
+        DocumentRequest req3 = createEnglishDoc("3", "Third document");
 
         int docId1 = indexingService.index(req1);
         int docId2 = indexingService.index(req2);
@@ -47,7 +56,7 @@ class IndexingServiceTest {
 
     @Test
     void testIndexEmptyContent() {
-        DocumentRequest request = new DocumentRequest("1", "");
+        DocumentRequest request = createEnglishDoc("1", "");
         int docId = indexingService.index(request);
 
         assertTrue(docId >= 0, "Should still assign document ID");
@@ -56,7 +65,7 @@ class IndexingServiceTest {
 
     @Test
     void testIndexWithStopWords() {
-        DocumentRequest request = new DocumentRequest("1", "The quick brown fox jumps over the lazy dog");
+        DocumentRequest request = createEnglishDoc("1", "The quick brown fox jumps over the lazy dog");
         int docId = indexingService.index(request);
 
         assertEquals(0, docId);
@@ -68,10 +77,10 @@ class IndexingServiceTest {
     void testGetDocumentCount() {
         assertEquals(0, indexingService.getDocumentCount());
 
-        indexingService.index(new DocumentRequest("1", "Doc 1"));
+        indexingService.index(createEnglishDoc("1", "Doc 1"));
         assertEquals(1, indexingService.getDocumentCount());
 
-        indexingService.index(new DocumentRequest("2", "Doc 2"));
+        indexingService.index(createEnglishDoc("2", "Doc 2"));
         assertEquals(2, indexingService.getDocumentCount());
     }
 
@@ -81,14 +90,14 @@ class IndexingServiceTest {
         assertNotNull(index, "InvertedIndex should not be null");
         assertEquals(0, index.getDocumentCount());
 
-        indexingService.index(new DocumentRequest("1", "Test"));
+        indexingService.index(createEnglishDoc("1", "Test"));
         assertEquals(1, index.getDocumentCount());
     }
 
     @Test
     void testReplaceIndex() {
         // Index some documents
-        indexingService.index(new DocumentRequest("1", "Original document"));
+        indexingService.index(createEnglishDoc("1", "Original document"));
         assertEquals(1, indexingService.getDocumentCount());
 
         // Create new index with different content
@@ -106,7 +115,7 @@ class IndexingServiceTest {
     @Test
     void testReplaceIndexClearsOldData() {
         // Add initial documents
-        indexingService.index(new DocumentRequest("1", "Old document"));
+        indexingService.index(createEnglishDoc("1", "Old document"));
 
         // Create new empty index
         InvertedIndex newIndex = new InvertedIndex();
@@ -123,7 +132,7 @@ class IndexingServiceTest {
         String complexContent = "Machine learning is a subset of artificial intelligence. " +
                 "It enables computers to learn from data without being explicitly programmed.";
 
-        DocumentRequest request = new DocumentRequest("1", complexContent);
+        DocumentRequest request = createEnglishDoc("1", complexContent);
         int docId = indexingService.index(request);
 
         assertEquals(0, docId);
@@ -132,7 +141,7 @@ class IndexingServiceTest {
 
     @Test
     void testIndexWithNumbers() {
-        DocumentRequest request = new DocumentRequest("1", "Java 21 is the latest LTS version");
+        DocumentRequest request = createEnglishDoc("1", "Java 21 is the latest LTS version");
         int docId = indexingService.index(request);
 
         assertEquals(0, docId);
@@ -141,7 +150,7 @@ class IndexingServiceTest {
 
     @Test
     void testIndexWithSpecialCharacters() {
-        DocumentRequest request = new DocumentRequest("1", "Hello! How are you? I'm fine, thanks.");
+        DocumentRequest request = createEnglishDoc("1", "Hello! How are you? I'm fine, thanks.");
         int docId = indexingService.index(request);
 
         assertEquals(0, docId);
@@ -151,7 +160,7 @@ class IndexingServiceTest {
     @Test
     void testIndexPreservesOriginalContent() {
         String originalContent = "The Quick Brown Fox";
-        DocumentRequest request = new DocumentRequest("1", originalContent);
+        DocumentRequest request = createEnglishDoc("1", originalContent);
         int docId = indexingService.index(request);
 
         // Verify original content is preserved
@@ -162,7 +171,7 @@ class IndexingServiceTest {
     @Test
     void testTextPreprocessing() {
         // Test that text preprocessing is applied
-        DocumentRequest request = new DocumentRequest("1", "RUNNING runs ran runner");
+        DocumentRequest request = createEnglishDoc("1", "RUNNING runs ran runner");
         indexingService.index(request);
 
         InvertedIndex index = indexingService.getInvertedIndex();
@@ -175,13 +184,13 @@ class IndexingServiceTest {
     void testConcurrentIndexing() throws InterruptedException {
         Thread t1 = new Thread(() -> {
             for (int i = 0; i < 10; i++) {
-                indexingService.index(new DocumentRequest("t1-" + i, "Thread 1 document " + i));
+                indexingService.index(createEnglishDoc("t1-" + i, "Thread 1 document " + i));
             }
         });
 
         Thread t2 = new Thread(() -> {
             for (int i = 0; i < 10; i++) {
-                indexingService.index(new DocumentRequest("t2-" + i, "Thread 2 document " + i));
+                indexingService.index(createEnglishDoc("t2-" + i, "Thread 2 document " + i));
             }
         });
 
@@ -201,8 +210,8 @@ class IndexingServiceTest {
     void testIndexMultipleDocumentsWithSameContent() {
         String content = "Duplicate content";
 
-        int docId1 = indexingService.index(new DocumentRequest("1", content));
-        int docId2 = indexingService.index(new DocumentRequest("2", content));
+        int docId1 = indexingService.index(createEnglishDoc("1", content));
+        int docId2 = indexingService.index(createEnglishDoc("2", content));
 
         assertNotEquals(docId1, docId2, "Should have different document IDs");
         assertEquals(2, indexingService.getDocumentCount());
@@ -215,7 +224,7 @@ class IndexingServiceTest {
             longContent.append("word").append(i).append(" ");
         }
 
-        DocumentRequest request = new DocumentRequest("1", longContent.toString());
+        DocumentRequest request = createEnglishDoc("1", longContent.toString());
         int docId = indexingService.index(request);
 
         assertEquals(0, docId);

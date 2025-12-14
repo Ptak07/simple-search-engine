@@ -24,4 +24,7 @@ public class CrawlRequest {
 
     @Builder.Default
     private Long delayMs = 1000L; // Wait 1s between requests
+
+    @Builder.Default
+    private String language = "pl";
 }

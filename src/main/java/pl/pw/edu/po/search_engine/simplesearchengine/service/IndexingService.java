@@ -4,7 +4,9 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.PolishTextPreprocessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextProcessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
 
 import java.util.List;
@@ -13,13 +15,27 @@ import java.util.List;
 @Slf4j
 public class IndexingService {
 
-    private final TextPreprocessor textPreprocessor;
+    private final TextPreprocessor englishPreprocessor;
+    private final PolishTextPreprocessor polishTextPreprocessor;
+
     @Getter
     private final InvertedIndex invertedIndex;
 
     public IndexingService() {
-        this.textPreprocessor = new TextPreprocessor();
+        this.englishPreprocessor = new TextPreprocessor();
+        this.polishTextPreprocessor = new PolishTextPreprocessor();
         this.invertedIndex = new InvertedIndex();
+    }
+
+    /**
+     * Select text preprocessor based on language.
+     * Defaults to Polish if language not specified.
+     */
+    private TextProcessor selectPreprocessor(String language) {
+        if ("en".equalsIgnoreCase(language)) {
+            return englishPreprocessor;
+        }
+        return polishTextPreprocessor;
     }
 
     /**
@@ -29,7 +45,8 @@ public class IndexingService {
      */
     public int index(DocumentRequest request) {
         String content = request.getContent();
-        List<String> tokens = textPreprocessor.process(content);
+        TextProcessor processor = selectPreprocessor(request.getLanguage());
+        List<String> tokens = processor.process(content);
         return invertedIndex.addDocument(content, tokens);
     }
 
@@ -40,7 +57,8 @@ public class IndexingService {
      */
     public void addDocument(String docId, String content) {
         log.debug("Adding document to index: docId={}", docId);
-        List<String> tokens = textPreprocessor.process(content);
+        TextProcessor processor = selectPreprocessor("pl");
+        List<String> tokens = processor.process(content);
         invertedIndex.addDocument(Integer.parseInt(docId), content, tokens);
     }
 

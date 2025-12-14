@@ -17,5 +17,8 @@ public class SearchRequest {
 
     @Builder.Default
     private Integer offset = 0;
+
+    @Builder.Default
+    private String language = "pl";
 }
 

@@ -4,13 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.*;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.PolishTextPreprocessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextProcessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
 import pl.pw.edu.po.search_engine.simplesearchengine.model.Document;
 import pl.pw.edu.po.search_engine.simplesearchengine.repository.DocumentRepository;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,7 +21,19 @@ public class SearchService {
     private final IndexingService indexingService;
     private final TfIdfScoringService tfIdfScoringService;
     private final DocumentRepository documentRepository;
-    private final TextPreprocessor textPreprocessor = new TextPreprocessor();
+    private final TextPreprocessor englishPreprocessor = new TextPreprocessor();
+    private final PolishTextPreprocessor polishPreprocessor = new PolishTextPreprocessor();
+
+    /**
+     * Select text processor based on language code.
+     * Defaults to Polish if language not specified.
+     */
+    private TextProcessor selectPreprocessor(String language) {
+        if ("en".equalsIgnoreCase(language)) {
+            return englishPreprocessor;
+        }
+        return polishPreprocessor; // Domyślnie polski
+    }
 
     /**
      * Mai search endpoint with pagination, snippets, and full document data.
@@ -28,11 +41,12 @@ public class SearchService {
     public SearchResponse search(SearchRequest request) {
         long startTime = System.currentTimeMillis();
 
-        log.info("Searching for: {} (limit: {}, offset: {})",
-                request.getQuery(), request.getLimit(), request.getOffset());
+        log.info("Searching for: {} (limit: {}, offset: {}, language: {})",
+                request.getQuery(), request.getLimit(), request.getOffset(), request.getLanguage());
 
         // 1. Tokenize query
-        List<String> queryTokens = textPreprocessor.process(request.getQuery());
+        TextProcessor processor = selectPreprocessor(request.getLanguage());
+        List<String> queryTokens = processor.process(request.getQuery());
         if (queryTokens.isEmpty()) {
             return buildEmptyResponse(request, startTime);
         }
@@ -52,7 +66,7 @@ public class SearchService {
 
         // 4. Score documents and create result
         List<SearchResult> allResults = documents.stream()
-                .map(doc -> createSearchResult(doc, queryTokens))
+                .map(doc -> createSearchResult(doc, queryTokens, request.getLanguage()))
                 .filter(result -> result.getScore() > 0)
                 .sorted(Comparator.comparingDouble(SearchResult::getScore).reversed())
                 .toList();
@@ -96,12 +110,13 @@ public class SearchService {
         return matchingDocs;
     }
 
-    private SearchResult createSearchResult(Document document, List<String> queryTokens) {
+    private SearchResult createSearchResult(Document document, List<String> queryTokens, String language) {
         // Calculate TF-IDF score
         double score = tfIdfScoringService.calculateTfIdfScore(document.getId().intValue(), queryTokens);
 
         // Find which terms matched
-        List<String> docTokens = textPreprocessor.process(
+        TextProcessor processor = selectPreprocessor(language);
+        List<String> docTokens = processor.process(
                 document.getTitle() + " " + document.getContent()
         );
         List<String> matchedTerms = queryTokens.stream()

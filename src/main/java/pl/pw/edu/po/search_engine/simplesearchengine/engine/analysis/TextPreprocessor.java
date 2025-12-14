@@ -6,7 +6,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class TextPreprocessor {
+public class TextPreprocessor implements TextProcessor {
 
     // List of common English stop words
     private static final Set<String> STOP_WORDS = Set.of(

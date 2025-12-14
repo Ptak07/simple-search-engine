@@ -22,6 +22,10 @@ public class DocumentRequest {
     @JsonProperty("url")
     private String url;
 
+    @JsonProperty("language")
+    @Builder.Default
+    private String language = "pl";
+
     public DocumentRequest(String id, String content) {
         this.id = id;
         this.content = content;
