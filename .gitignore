@@ -1,60 +1,44 @@
-HELP.md
+# MAVEN BUILD
 target/
-.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-# Old persistence file (replaced by PostgreSQL)
+# SENSITIVE CONFIG
+**/application.properties
+
+# Template
+!**/application.properties.example
+
+# Inne
+**/application-prod.properties
+**/application-secret.properties
+**/.env
+
+
+# FRONTEND - TYLKO GENEROWANE PLIKI
+frontend/frontend/generated/
+frontend/frontend/index.html
+frontend/node_modules/
+frontend/vite.generated.ts
+frontend/target/
+
+# OLD PERSISTENCE
 index.ser
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
+# IDE
+.idea/
 *.iml
 *.ipr
+*.iws
 out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
 .vscode/
 
-# Java
+# JAVA
 *.class
-*.jar
-*.war
-*.ear
 
-# Maven
-target/
-
-# Logs
+# LOGS
 *.log
 
-# OS-specific
+# OS
 .DS_Store
 Thumbs.db
-
-# Lombok-generated
-.lombok/
-
-# Environment variables
-.env
-.env.local
