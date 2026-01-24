@@ -6,8 +6,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchRequest;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResponse;
-import pl.pw.edu.po.search_engine.simplesearchengine.dto.SearchResult;
-import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.PolishTextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.SearchIndex;
 import pl.pw.edu.po.search_engine.simplesearchengine.model.Document;
 import pl.pw.edu.po.search_engine.simplesearchengine.repository.DocumentRepository;
 
@@ -21,6 +22,7 @@ import static org.mockito.Mockito.*;
 /**
  * Unit tests for SearchService (Phase 5).
  * Tests enhanced search with PostgreSQL integration.
+ * Updated to use proper DI with SearchIndex.
  */
 class SearchServiceTest {
 
@@ -28,13 +30,16 @@ class SearchServiceTest {
     private DocumentRepository documentRepository;
 
     @Mock
-    private IndexingService indexingService;
-
-    @Mock
     private TfIdfScoringService tfIdfScoringService;
 
     @Mock
-    private InvertedIndex invertedIndex;
+    private SearchIndex searchIndex;
+
+    @Mock
+    private TextPreprocessor englishPreprocessor;
+
+    @Mock
+    private PolishTextPreprocessor polishPreprocessor;
 
     private SearchService searchService;
 
@@ -42,13 +47,16 @@ class SearchServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        // Mock IndexingService to return InvertedIndex
-        when(indexingService.getInvertedIndex()).thenReturn(invertedIndex);
+        // Mock SearchIndex to return empty results by default
+        when(searchIndex.getDocumentsForTerm(anyString())).thenReturn(new HashMap<>());
 
-        // Mock InvertedIndex to return empty results by default
-        when(invertedIndex.getDocumentsForTerm(anyString())).thenReturn(new HashMap<>());
-
-        searchService = new SearchService(indexingService, tfIdfScoringService, documentRepository);
+        searchService = new SearchService(
+            searchIndex,
+            tfIdfScoringService,
+            documentRepository,
+            englishPreprocessor,
+            polishPreprocessor
+        );
     }
 
     @Test
