@@ -3,17 +3,29 @@ package pl.pw.edu.po.search_engine.simplesearchengine.engine.core;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class InvertedIndex implements Serializable {
+/**
+ * Thread-safe inverted index implementation.
+ * Uses ConcurrentHashMap and ReadWriteLock for concurrent access.
+ * Provides O(M) complexity for removeDocument where M is terms per document.
+ */
+public class InvertedIndex implements SearchIndex, Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
     // Mapping: term -> (document ID -> term positions)
-    private final Map<String, Map<Integer, List<Integer>>> index = new HashMap<>();
+    private final Map<String, Map<Integer, List<Integer>>> index = new ConcurrentHashMap<>();
 
     // Forward index: document ID -> content
-    private final Map<Integer, String> forwardIndex = new HashMap<>();
+    private final Map<Integer, String> forwardIndex = new ConcurrentHashMap<>();
 
+    // Reverse mapping: document ID -> set of terms (for efficient removal)
+    private final Map<Integer, Set<String>> docIdToTerms = new ConcurrentHashMap<>();
+
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private int nextDocId;
 
     /**
@@ -23,20 +35,16 @@ public class InvertedIndex implements Serializable {
      * @param tokens tokenized content
      * @return assigned document ID
      */
-    public synchronized int addDocument(String content, List<String> tokens) {
-        int docId = nextDocId++;
-        forwardIndex.put(docId, content);
-
-        for (int position = 0; position < tokens.size(); position++) {
-            String term = tokens.get(position);
-
-            index
-                    .computeIfAbsent(term, k -> new HashMap<>())
-                    .computeIfAbsent(docId, k -> new ArrayList<>())
-                    .add(position);
+    @Override
+    public int addDocument(String content, List<String> tokens) {
+        lock.writeLock().lock();
+        try {
+            int docId = nextDocId++;
+            addDocumentInternal(docId, content, tokens);
+            return docId;
+        } finally {
+            lock.writeLock().unlock();
         }
-
-        return docId;
     }
 
     /**
@@ -47,106 +55,206 @@ public class InvertedIndex implements Serializable {
      * @param content document content
      * @param tokens tokenized content
      */
-    public synchronized void addDocument(int docId, String content, List<String> tokens) {
-        forwardIndex.put(docId, content);
+    @Override
+    public void addDocument(int docId, String content, List<String> tokens) {
+        lock.writeLock().lock();
+        try {
+            addDocumentInternal(docId, content, tokens);
 
-        for (int position = 0; position < tokens.size(); position++) {
-            String term = tokens.get(position);
-
-            index
-                    .computeIfAbsent(term, k -> new HashMap<>())
-                    .computeIfAbsent(docId, k -> new ArrayList<>())
-                    .add(position);
-        }
-
-        // Update nextDocId to avoid conflicts
-        if (docId >= nextDocId) {
-            nextDocId = docId + 1;
+            // Update nextDocId to avoid conflicts
+            if (docId >= nextDocId) {
+                nextDocId = docId + 1;
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     /**
-     * Returns map of documents (id -> positions) containing the term
+     * Internal method to add document (must be called within write lock).
      */
+    private void addDocumentInternal(int docId, String content, List<String> tokens) {
+        forwardIndex.put(docId, content);
+        Set<String> termsInDoc = new HashSet<>();
+
+        for (int position = 0; position < tokens.size(); position++) {
+            String term = tokens.get(position);
+            termsInDoc.add(term);
+
+            index
+                    .computeIfAbsent(term, k -> new ConcurrentHashMap<>())
+                    .computeIfAbsent(docId, k -> Collections.synchronizedList(new ArrayList<>()))
+                    .add(position);
+        }
+
+        docIdToTerms.put(docId, termsInDoc);
+    }
+
+    /**
+     * Returns immutable map of documents (id -> positions) containing the term.
+     * Thread-safe read operation.
+     */
+    @Override
     public Map<Integer, List<Integer>> getDocumentsForTerm(String term) {
-        return index.getOrDefault(term, Collections.emptyMap());
+        lock.readLock().lock();
+        try {
+            Map<Integer, List<Integer>> result = index.get(term);
+            if (result == null || result.isEmpty()) {
+                return Collections.emptyMap();
+            }
+            // Return defensive copy with unmodifiable inner lists
+            Map<Integer, List<Integer>> copy = new HashMap<>();
+            result.forEach((docId, positions) ->
+                copy.put(docId, Collections.unmodifiableList(new ArrayList<>(positions)))
+            );
+            return Collections.unmodifiableMap(copy);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
      * Returns original document content by its ID.
+     * Thread-safe read operation.
      */
+    @Override
     public String getDocumentById(int docId) {
-        return forwardIndex.get(docId);
+        lock.readLock().lock();
+        try {
+            return forwardIndex.get(docId);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
      * Returns number of all documents in the index.
+     * Thread-safe read operation.
      */
+    @Override
     public int getDocumentCount() {
-        return forwardIndex.size();
+        lock.readLock().lock();
+        try {
+            return forwardIndex.size();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
-     * Returns original document content by its ID.
-     * (Note: duplicate of getDocumentById - consider removing)
-     */
-    public String getDocumentCountById(int docId) {
-        return forwardIndex.get(docId);
-    }
-
-    /**
-     * Print whole index
+     * Print whole index (for debugging).
      */
     public void printIndex() {
-        index.forEach((term, docs) -> {
-            System.out.println(term + " -> " + docs);
-        });
+        index.forEach((term, docs) -> System.out.println(term + " -> " + docs));
     }
 
     /**
-     * Clear all documents from the index (delegation pattern support)
+     * Clear all documents from the index (delegation pattern support).
+     * Thread-safe write operation.
      */
-    public synchronized void clear() {
-        index.clear();
-        forwardIndex.clear();
-        nextDocId = 0;
+    @Override
+    public void clear() {
+        lock.writeLock().lock();
+        try {
+            index.clear();
+            forwardIndex.clear();
+            docIdToTerms.clear();
+            nextDocId = 0;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
-     * Remove document from index
-     * Removes all term entries for the given document ID
+     * Remove document from index.
+     * Efficiently removes all term entries using reverse mapping.
+     * Complexity: O(M) where M is number of terms in document, not O(N) of all terms.
+     * Thread-safe write operation.
      */
-    public synchronized void removeDocument(int docId) {
-        // 1. Remove from forward index
-        forwardIndex.remove(docId);
+    @Override
+    public void removeDocument(int docId) {
+        lock.writeLock().lock();
+        try {
+            // 1. Remove from forward index
+            forwardIndex.remove(docId);
 
-        // 2. Remove from inverted index (all terms containing this docId)
-        index.forEach((term, docMap) -> {
-            docMap.remove(docId);
-        });
+            // 2. Get terms for this document from reverse mapping (O(1))
+            Set<String> terms = docIdToTerms.remove(docId);
+            if (terms == null) {
+                return; // Document not found
+            }
 
-        // 3. Remove empty terms (optional - clean up)
-        index.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+            // 3. Remove from inverted index (O(M) where M = terms in document)
+            for (String term : terms) {
+                Map<Integer, List<Integer>> docMap = index.get(term);
+                if (docMap != null) {
+                    docMap.remove(docId);
+                    // Clean up empty term entries
+                    if (docMap.isEmpty()) {
+                        index.remove(term);
+                    }
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
-     * Merge another index into this one (delegation pattern support)
-     * Preserves all documents from the new index with new document IDs
+     * Merge another index into this one (delegation pattern support).
+     * Preserves all documents from the new index with new document IDs.
+     * Properly handles document ID remapping and maintains all data structures.
+     * Thread-safe write operation.
      */
-    public synchronized void merge(InvertedIndex other) {
-        if (other == null) return;
+    @Override
+    public void merge(SearchIndex other) {
+        if (!(other instanceof InvertedIndex otherIndex)) {
+            return;
+        }
 
-        // Merge forward index and rebuild inverted index
-        other.forwardIndex.forEach((oldDocId, content) -> {
-            int newDocId = nextDocId++;
-            forwardIndex.put(newDocId, content);
-        });
+        lock.writeLock().lock();
+        otherIndex.lock.readLock().lock();
+        try {
+            // Create mapping from old docId to new docId
+            Map<Integer, Integer> docIdMapping = new HashMap<>();
 
-        // Rebuild the inverted index based on forward index
-        // Note: We lose term position information during merge, so we reset it
-        other.index.forEach((term, docMap) -> {
-            index.computeIfAbsent(term, k -> new HashMap<>())
-                    .putAll(docMap);
-        });
+            // 1. Merge forward index with new IDs
+            otherIndex.forwardIndex.forEach((oldDocId, content) -> {
+                int newDocId = nextDocId++;
+                docIdMapping.put(oldDocId, newDocId);
+                forwardIndex.put(newDocId, content);
+            });
+
+            // 2. Merge inverted index with remapped document IDs
+            otherIndex.index.forEach((term, oldDocMap) -> {
+                Map<Integer, List<Integer>> targetDocMap = index.computeIfAbsent(
+                    term,
+                    k -> new ConcurrentHashMap<>()
+                );
+
+                oldDocMap.forEach((oldDocId, positions) -> {
+                    Integer newDocId = docIdMapping.get(oldDocId);
+                    if (newDocId != null) {
+                        // Create new list with same positions
+                        targetDocMap.put(
+                            newDocId,
+                            Collections.synchronizedList(new ArrayList<>(positions))
+                        );
+                    }
+                });
+            });
+
+            // 3. Merge reverse mapping with remapped document IDs
+            otherIndex.docIdToTerms.forEach((oldDocId, terms) -> {
+                Integer newDocId = docIdMapping.get(oldDocId);
+                if (newDocId != null) {
+                    docIdToTerms.put(newDocId, new HashSet<>(terms));
+                }
+            });
+
+        } finally {
+            otherIndex.lock.readLock().unlock();
+            lock.writeLock().unlock();
+        }
     }
 }
