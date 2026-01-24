@@ -1,28 +1,47 @@
 package pl.pw.edu.po.search_engine.simplesearchengine.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.*;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.PolishTextPreprocessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextProcessor;
-import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.SearchIndex;
 import pl.pw.edu.po.search_engine.simplesearchengine.model.Document;
 import pl.pw.edu.po.search_engine.simplesearchengine.repository.DocumentRepository;
 
 import java.util.*;
 
+/**
+ * Service for search operations.
+ * Uses constructor injection for all dependencies (proper Spring DI).
+ * Decoupled from IndexingService - directly uses SearchIndex.
+ */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SearchService {
 
-    private final IndexingService indexingService;
+    private final SearchIndex searchIndex;
     private final TfIdfScoringService tfIdfScoringService;
     private final DocumentRepository documentRepository;
-    private final TextPreprocessor englishPreprocessor = new TextPreprocessor();
-    private final PolishTextPreprocessor polishPreprocessor = new PolishTextPreprocessor();
+    private final TextPreprocessor englishPreprocessor;
+    private final PolishTextPreprocessor polishPreprocessor;
+
+    /**
+     * Constructor injection - all dependencies provided by Spring.
+     */
+    public SearchService(
+            SearchIndex searchIndex,
+            TfIdfScoringService tfIdfScoringService,
+            DocumentRepository documentRepository,
+            TextPreprocessor englishPreprocessor,
+            PolishTextPreprocessor polishPreprocessor) {
+        this.searchIndex = searchIndex;
+        this.tfIdfScoringService = tfIdfScoringService;
+        this.documentRepository = documentRepository;
+        this.englishPreprocessor = englishPreprocessor;
+        this.polishPreprocessor = polishPreprocessor;
+    }
 
     /**
      * Select text processor based on language code.
@@ -94,10 +113,8 @@ public class SearchService {
      * Find documents containing ALL query tokens.
      */
     private Set<Integer> findMatchingDocuments(List<String> queryTokens) {
-        InvertedIndex invertedIndex = indexingService.getInvertedIndex();
-
         List<Set<Integer>> docsPerTerm = queryTokens.stream()
-                .map(term -> invertedIndex.getDocumentsForTerm(term).keySet())
+                .map(term -> searchIndex.getDocumentsForTerm(term).keySet())
                 .toList();
 
         if (docsPerTerm.isEmpty()) return Set.of();
