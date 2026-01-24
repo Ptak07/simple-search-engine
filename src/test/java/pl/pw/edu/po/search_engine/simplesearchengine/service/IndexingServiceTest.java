@@ -3,7 +3,10 @@ package pl.pw.edu.po.search_engine.simplesearchengine.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.PolishTextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.SearchIndex;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,10 +17,20 @@ import static org.junit.jupiter.api.Assertions.*;
 class IndexingServiceTest {
 
     private IndexingService indexingService;
+    private SearchIndex searchIndex;
 
     @BeforeEach
     void setUp() {
-        indexingService = new IndexingService();
+        // Create dependencies manually for testing
+        TextPreprocessor englishPreprocessor = new TextPreprocessor();
+        PolishTextPreprocessor polishPreprocessor = new PolishTextPreprocessor();
+        searchIndex = new InvertedIndex();
+
+        indexingService = new IndexingService(
+            englishPreprocessor,
+            polishPreprocessor,
+            searchIndex
+        );
     }
 
     // Helper method to create English DocumentRequest (tests use English words)
@@ -85,13 +98,12 @@ class IndexingServiceTest {
     }
 
     @Test
-    void testGetInvertedIndex() {
-        InvertedIndex index = indexingService.getInvertedIndex();
-        assertNotNull(index, "InvertedIndex should not be null");
-        assertEquals(0, index.getDocumentCount());
+    void testGetSearchIndex() {
+        assertNotNull(searchIndex, "SearchIndex should not be null");
+        assertEquals(0, searchIndex.getDocumentCount());
 
         indexingService.index(createEnglishDoc("1", "Test"));
-        assertEquals(1, index.getDocumentCount());
+        assertEquals(1, searchIndex.getDocumentCount());
     }
 
     @Test
@@ -101,7 +113,7 @@ class IndexingServiceTest {
         assertEquals(1, indexingService.getDocumentCount());
 
         // Create new index with different content
-        InvertedIndex newIndex = new InvertedIndex();
+        SearchIndex newIndex = new InvertedIndex();
         newIndex.addDocument("New document 1", java.util.List.of("new", "document"));
         newIndex.addDocument("New document 2", java.util.List.of("another", "new"));
 
@@ -118,7 +130,7 @@ class IndexingServiceTest {
         indexingService.index(createEnglishDoc("1", "Old document"));
 
         // Create new empty index
-        InvertedIndex newIndex = new InvertedIndex();
+        SearchIndex newIndex = new InvertedIndex();
 
         // Replace with empty index
         indexingService.replaceIndex(newIndex);
@@ -164,7 +176,7 @@ class IndexingServiceTest {
         int docId = indexingService.index(request);
 
         // Verify original content is preserved
-        String retrievedContent = indexingService.getInvertedIndex().getDocumentById(docId);
+        String retrievedContent = searchIndex.getDocumentById(docId);
         assertEquals(originalContent, retrievedContent);
     }
 
@@ -174,10 +186,9 @@ class IndexingServiceTest {
         DocumentRequest request = createEnglishDoc("1", "RUNNING runs ran runner");
         indexingService.index(request);
 
-        InvertedIndex index = indexingService.getInvertedIndex();
         // After stemming, these should have a common stem
-        assertFalse(index.getDocumentsForTerm("run").isEmpty() ||
-                   index.getDocumentsForTerm("runner").isEmpty());
+        assertFalse(searchIndex.getDocumentsForTerm("run").isEmpty() ||
+                   searchIndex.getDocumentsForTerm("runner").isEmpty());
     }
 
     @Test

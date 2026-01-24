@@ -2,23 +2,29 @@ package pl.pw.edu.po.search_engine.simplesearchengine.service;
 
 import org.springframework.stereotype.Service;
 import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
-import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.SearchIndex;
 
 import java.util.*;
 
 /**
- *  * Service responsible for calculating document relevance scores using the TF-IDF algorithm.
- *  * It uses data stored in the InvertedIndex (term frequencies, document counts, etc.).
+ * Service responsible for calculating document relevance scores using the TF-IDF algorithm.
+ * Uses constructor injection for all dependencies (proper Spring DI).
+ * Decoupled from IndexingService - directly uses SearchIndex.
  */
 @Service
 public class TfIdfScoringService {
 
-    private final InvertedIndex invertedIndex;
+    private final SearchIndex searchIndex;
     private final TextPreprocessor textPreprocessor;
 
-    public TfIdfScoringService(IndexingService  indexingService) {
-        this.invertedIndex = indexingService.getInvertedIndex();
-        this.textPreprocessor = new TextPreprocessor();
+    /**
+     * Constructor injection - all dependencies provided by Spring.
+     * @param searchIndex Thread-safe search index bean
+     * @param textPreprocessor English text preprocessor bean
+     */
+    public TfIdfScoringService(SearchIndex searchIndex, TextPreprocessor textPreprocessor) {
+        this.searchIndex = searchIndex;
+        this.textPreprocessor = textPreprocessor;
     }
 
     /**
@@ -30,8 +36,8 @@ public class TfIdfScoringService {
     public double calculateTfIdfScore(int docId, List<String> queryTokens) {
 
         // Defensive guards
-        int totalDocs = Math.max(1, invertedIndex.getDocumentCount());
-        String content = invertedIndex.getDocumentById(docId);
+        int totalDocs = Math.max(1, searchIndex.getDocumentCount());
+        String content = searchIndex.getDocumentById(docId);
         if (content == null || content.isBlank()) return 0.0;
 
         // Count document length AFTER the same preprocessing as used at indexing time.
@@ -45,7 +51,7 @@ public class TfIdfScoringService {
 
         double score = 0.0;
         for (String term : uniqueQueryTerms) {
-            Map<Integer, List<Integer>> postings = invertedIndex.getDocumentsForTerm(term);
+            Map<Integer, List<Integer>> postings = searchIndex.getDocumentsForTerm(term);
             List<Integer> positions = postings.get(docId);
             if (positions == null || positions.isEmpty()) continue;
 

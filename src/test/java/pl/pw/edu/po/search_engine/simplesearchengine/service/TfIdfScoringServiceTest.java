@@ -3,6 +3,10 @@ package pl.pw.edu.po.search_engine.simplesearchengine.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import pl.pw.edu.po.search_engine.simplesearchengine.dto.DocumentRequest;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.PolishTextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.analysis.TextPreprocessor;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.InvertedIndex;
+import pl.pw.edu.po.search_engine.simplesearchengine.engine.core.SearchIndex;
 
 import java.util.List;
 
@@ -11,16 +15,28 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for TfIdfScoringService.
  * Tests TF-IDF score calculation.
+ * Updated to use proper DI.
  */
 class TfIdfScoringServiceTest {
 
     private IndexingService indexingService;
     private TfIdfScoringService tfIdfScoringService;
+    private SearchIndex searchIndex;
 
     @BeforeEach
     void setUp() {
-        indexingService = new IndexingService();
-        tfIdfScoringService = new TfIdfScoringService(indexingService);
+        // Create dependencies manually for testing
+        TextPreprocessor englishPreprocessor = new TextPreprocessor();
+        PolishTextPreprocessor polishPreprocessor = new PolishTextPreprocessor();
+        searchIndex = new InvertedIndex();
+
+        indexingService = new IndexingService(
+            englishPreprocessor,
+            polishPreprocessor,
+            searchIndex
+        );
+
+        tfIdfScoringService = new TfIdfScoringService(searchIndex, englishPreprocessor);
     }
 
     // Helper method to create English DocumentRequest (tests use English words)
