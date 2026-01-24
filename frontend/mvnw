@@ -1,0 +1,5 @@
+#!/bin/bash
+# Maven Wrapper for frontend - uses backend's Maven Wrapper
+
+BACKEND_DIR="$(dirname "$0")/../backend"
+exec "$BACKEND_DIR/mvnw" -f "$(dirname "$0")/pom.xml" "$@"
