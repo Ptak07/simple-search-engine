@@ -1,9 +1,9 @@
 spring.application.name=Simple Search Engine
 
 # PostgreSQL Connection
-spring.datasource.url=${DB_URL}
-spring.datasource.username=${DB_USERNAME}
-spring.datasource.password=${DB_PASSWORD}
+spring.datasource.url=jdbc:postgresql://localhost:5432/searchengine
+spring.datasource.username=YOUR_USERNAME_HERE
+spring.datasource.password=YOUR_PASSWORD_HERE
 spring.datasource.driver-class-name=org.postgresql.Driver
 
 # JPA/Hibernate Configuration
@@ -25,8 +25,5 @@ springdoc.swagger-ui.operationsSorter=method
 spring.mvc.log-resolved-exception=false
 
 # HTTP Timeout Configuration (for long-running operations)
-# Async request timeout: 10 minutes (600000ms)
 spring.mvc.async.request-timeout=600000
-# Tomcat connection timeout: 10 minutes (600000ms)
 server.tomcat.connection-timeout=600000
-

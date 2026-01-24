@@ -17,6 +17,7 @@ import pl.pw.edu.po.search_engine.simplesearchengine.repository.CrawlHistoryRepo
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Service responsible for web crawling functionality.
@@ -35,6 +36,7 @@ public class CrawlerService {
     private static final int MIN_CONTENT_LENGTH = 100;
     private static final long MAX_CRAWL_DURATION_MS = 3600000; // 1 hour max per crawl
     private final Map<Long, Boolean> activeCrawls = new java.util.concurrent.ConcurrentHashMap<>();
+
 
     /**
      * Start crawling asynchronously in background.
@@ -455,3 +457,4 @@ public class CrawlerService {
      */
     private record UrlWithDepth(String url, int depth) {}
 }
+

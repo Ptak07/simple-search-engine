@@ -38,6 +38,15 @@ public class Document {
     @Column(name = "crawled_at")
     private LocalDateTime crawledAt;
 
+    // Alias for frontend compatibility (indexedAt = crawledAt)
+    public LocalDateTime getIndexedAt() {
+        return crawledAt;
+    }
+
+    public void setIndexedAt(LocalDateTime indexedAt) {
+        this.crawledAt = indexedAt;
+    }
+
     // Hibernate lifecycle callback
     @PrePersist
     protected void onCreate() {

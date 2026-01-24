@@ -5,6 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,5 +23,13 @@ public class SearchRequest {
 
     @Builder.Default
     private String language = "pl";
+
+    // NOWE POLA dla faceted search
+    private List<String> domains;      // Filter by domain (e.g., ["wikipedia.org", "github.com"])
+    private LocalDate fromDate;        // Filter by indexed date (from)
+    private LocalDate toDate;          // Filter by indexed date (to)
+    private String contentType;        // Filter by content type (e.g., "HTML", "PDF")
 }
+
+
 
