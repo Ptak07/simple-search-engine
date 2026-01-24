@@ -119,7 +119,7 @@ public class SearchService {
 
         if (docsPerTerm.isEmpty()) return Set.of();
 
-        Set<Integer> matchingDocs = new HashSet<>(docsPerTerm.getFirst());
+        Set<Integer> matchingDocs = new HashSet<>(docsPerTerm.get(0));
         for (int i = 1; i < docsPerTerm.size(); i++) {
             matchingDocs.retainAll(docsPerTerm.get(i));
         }

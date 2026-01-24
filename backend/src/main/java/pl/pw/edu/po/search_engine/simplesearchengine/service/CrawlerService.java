@@ -199,6 +199,11 @@ public class CrawlerService {
                     log.warn("Skipped (too short): {}", url);
                 }
 
+                // Update progress in database every 5 pages
+                if (pagesProcessed % 5 == 0) {
+                    updateCrawlProgress(history, pagesProcessed, documentsIndexed);
+                }
+
                 // Extract and queue links if depth limit not reached
                 if (depth < request.getMaxDepth()) {
                     int linksAdded = extractAndQueueLinks(doc, request.getStartUrl(), urlQueue, depth);
@@ -286,6 +291,20 @@ public class CrawlerService {
             return "SUCCESS";
         }
         return documentsIndexed > 0 ? "PARTIAL" : "FAILED";
+    }
+
+    /**
+     * Updates the crawl progress in database (called periodically during crawling).
+     *
+     * @param history the crawl history entity
+     * @param pagesCrawled current number of pages crawled
+     * @param documentsIndexed current number of documents indexed
+     */
+    private void updateCrawlProgress(CrawlHistory history, int pagesCrawled, int documentsIndexed) {
+        history.setPagesCrawled(pagesCrawled);
+        history.setDocumentsIndexed(documentsIndexed);
+        crawlHistoryRepository.save(history);
+        log.debug("Progress updated: pages={}, indexed={}", pagesCrawled, documentsIndexed);
     }
 
     /**
