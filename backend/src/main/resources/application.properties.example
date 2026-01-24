@@ -1,0 +1,29 @@
+spring.application.name=Simple Search Engine
+
+# PostgreSQL Connection
+spring.datasource.url=jdbc:postgresql://localhost:5432/searchengine
+spring.datasource.username=YOUR_USERNAME_HERE
+spring.datasource.password=YOUR_PASSWORD_HERE
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA/Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+
+# Logging
+logging.level.org.hibernate.SQL=DEBUG
+logging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+
+# Swagger/OpenAPI Configuration
+springdoc.api-docs.path=/v3/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.swagger-ui.operationsSorter=method
+
+# Disable favicon errors
+spring.mvc.log-resolved-exception=false
+
+# HTTP Timeout Configuration (for long-running operations)
+spring.mvc.async.request-timeout=600000
+server.tomcat.connection-timeout=600000

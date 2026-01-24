@@ -1,11 +1,32 @@
 # Simple Search Engine
 
-> Zaawansowana wielojęzyczna wyszukiwarka full-text z thread-safe indeksem odwróconym, rankingiem TF-IDF i persystencją w PostgreSQL.
+> Zaawansowana wielojęzyczna wyszukiwarka full-text z thread-safe indeksem odwróconym, rankingiem TF-IDF i persystencją w PostgreSQL.  
+> **Multi-module projekt:** Backend REST API + Vaadin Flow Frontend
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-green.svg)](https://spring.io/projects/spring-boot)
+[![Vaadin](https://img.shields.io/badge/Vaadin-24.3-blue.svg)](https://vaadin.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## 📦 Architektura Projektu
+
+Projekt składa się z **dwóch niezależnych modułów Maven**:
+
+```
+simple-search-engine/
+├── backend/        # Spring Boot REST API (Port 8080)
+│   ├── Crawler & Indexer
+│   ├── Search Engine (TF-IDF)
+│   └── PostgreSQL Integration
+│
+└── frontend/       # Vaadin Flow UI (Port 8081)
+    ├── Search Dashboard
+    ├── Crawler Control Panel
+    └── Analytics & Visualizations
+```
 
 ---
 
@@ -27,24 +48,22 @@
 
 ## 🚀 Kluczowe funkcje
 
-### Wyszukiwarka
+### Backend (REST API)
 - ✅ **Thread-safe Inverted Index** - Współbieżny dostęp dzięki `ConcurrentHashMap` + `ReadWriteLock`
 - ✅ **TF-IDF Ranking** - Zaawansowany algorytm oceny trafności z wygładzonym IDF
 - ✅ **Multi-language Support** - Polski (Stempel) i angielski (Snowball) stemming
 - ✅ **Smart Snippets** - Kontekstowe fragmenty (200 znaków) wokół dopasowań
 - ✅ **Pagination** - Efektywne stronicowanie wyników (offset + limit)
 - ✅ **Reverse Mapping** - Optymalizacja usuwania dokumentów: **O(M) zamiast O(N)**
-
-### Persystencja
 - ✅ **PostgreSQL Integration** - Trwały magazyn dokumentów z JPA/Hibernate
-- ✅ **Auto Index Rebuild** - Automatyczna odbudowa indeksu z bazy przy starcie aplikacji
-- ✅ **Audit Trail** - Timestamps (`created_at`, `updated_at`) dla każdego dokumentu
+- ✅ **Web Crawler** - BFS crawling z async execution i history tracking
 
-### Web Crawler
-- ✅ **BFS Crawling** - Przeszukiwanie wszerz z ograniczeniami głębokości i liczby stron
-- ✅ **Async Execution** - Asynchroniczny crawling z thread pool (2-5 workers)
-- ✅ **Cancellation Support** - Możliwość anulowania długotrwałych zadań
-- ✅ **History Tracking** - Pełna historia crawlingu w bazie danych
+### Frontend (Vaadin Flow)
+- ✅ **Real-time Crawler Console** - Live logs i progress bars z `@Push`
+- ✅ **Faceted Search** - Dynamiczne filtry (domena, data, typ treści)
+- ✅ **Analytics Dashboard** - Wykresy i statystyki indeksowanych stron
+- ✅ **Network Graph** - Wizualizacja połączeń między stronami
+- ✅ **Lazy Loading** - Wydajne ładowanie dużych zbiorów danych
 
 ### API & Documentation
 - ✅ **RESTful API** - CRUD dla dokumentów, wyszukiwanie, kontrola crawlera
@@ -184,59 +203,90 @@ LOGGING_LEVEL_APP=DEBUG
 
 ⚠️ **Ważne**: Nie commituj pliku `.env` do repozytorium (jest w `.gitignore`)!
 
-### 4. Build i uruchomienie
+### 4. Build i uruchomienie (Multi-Module)
 
-#### Użycie Maven Wrapper (zalecane)
+#### Opcja A: Build całego projektu (Backend + Frontend)
 ```bash
-# Build
-./mvnw clean install
-
-# Uruchomienie
-./mvnw spring-boot:run
-```
-
-#### Użycie lokalnego Mavena
-```bash
-# Build
+# Z głównego katalogu
 mvn clean install
 
-# Uruchomienie
+# Uruchom backend (terminal 1)
+cd backend
+./mvnw spring-boot:run
+
+# Uruchom frontend (terminal 2)
+cd frontend
 mvn spring-boot:run
 ```
 
+#### Opcja B: Build tylko backendu
+```bash
+cd backend
+./mvnw clean install
+./mvnw spring-boot:run
+```
+
+#### Opcja C: Build tylko frontendu
+```bash
+cd frontend
+mvn clean install
+mvn spring-boot:run
+```
+
+#### Porty aplikacji
+- **Backend**: http://localhost:8080
+- **Frontend**: http://localhost:8081
+
 #### Uruchomienie z profilem
 ```bash
+# Backend z profilem dev
+cd backend
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 #### Uruchomienie z JAR
 ```bash
-# Build JAR
+# Backend
+cd backend
 ./mvnw clean package
+java -jar target/search-engine-backend-1.0.0.jar
 
-# Uruchomienie
-java -jar target/simple-search-engine-0.0.1-SNAPSHOT.jar
+# Frontend
+cd frontend
+mvn clean package
+java -jar target/search-engine-frontend-1.0.0.jar
 ```
 
 ### 5. Weryfikacja działania
 
+#### Backend (Port 8080)
+
 Aplikacja uruchomi się na `http://localhost:8080`
 
-#### Sprawdź health endpoint
+##### Sprawdź health endpoint
 ```bash
 curl http://localhost:8080/actuator/health
 # Powinno zwrócić: {"status":"UP"}
 ```
 
-#### Otwórz Swagger UI
+##### Otwórz Swagger UI
 ```
 http://localhost:8080/swagger-ui.html
 ```
 
-#### OpenAPI Specification (JSON)
+##### OpenAPI Specification (JSON)
 ```
 http://localhost:8080/v3/api-docs
 ```
+
+#### Frontend (Port 8081)
+
+Interfejs użytkownika dostępny na `http://localhost:8081`
+
+##### Moduły dostępne:
+- **Search Dashboard** - `/search` - Wyszukiwanie z filtrami
+- **Crawler Console** - `/crawler` - Kontrola crawlera z live logs
+- **Analytics** - `/analytics` - Wykresy i statystyki
 
 ### 6. Pierwszy test - Dodaj dokument
 
